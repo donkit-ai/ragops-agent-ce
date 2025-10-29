@@ -79,16 +79,20 @@ def create_embedder(embedder_type: str) -> Embeddings:
 class VectorstoreParams(BaseModel):
     backend: Literal["qdrant", "chroma", "milvus"] = Field(default="qdrant")
     embedder_type: str = Field(default="vertex")
-    collection_name: str = Field(
-        default="my_collection", description="Use just project id, not 'ragops_<project_id>'"
-    )
+    collection_name: str = Field(description="Use collection name from rag config")
     database_uri: str = Field(
         default="http://localhost:6333", description="local vectorstore database URI outside docker"
     )
 
 
 class VectorstoreLoadArgs(BaseModel):
-    chunks_dir: str
+    chunks_path: str = Field(
+        description=(
+            "Path to chunked files: directory, single JSON file, or comma-separated list. "
+            "Examples: '/path/to/chunked/', '/path/file.json', "
+            "'/path/file1.json,/path/file2.json'"
+        )
+    )
     params: VectorstoreParams
 
 
@@ -101,26 +105,56 @@ server = mcp.server.FastMCP(
 @server.tool(
     name="vectorstore_load",
     description=(
-        "Loads document chunks from all JSON files in a directory into a specified "
-        "vectorstore collection."
+        "Loads document chunks from JSON files into a specified vectorstore collection. "
+        "Supports: directory (all JSON files), single file, or comma-separated file list. "
+        "For INCREMENTAL loading (adding new files to existing RAG): pass specific file path(s) "
+        "like '/path/new_file.json' or '/path/file1.json,/path/file2.json', NOT directory path. "
+        "Use list_directory on chunked folder to find which files to load."
     ),
 )
 @validate_call
 async def vectorstore_load(
-    chunks_dir: str,
+    chunks_path: str,
     params: VectorstoreParams,
 ) -> mcp.types.TextContent:
-    dir_path = Path(chunks_dir)
-    if not dir_path.exists() or not dir_path.is_dir():
-        return mcp.types.TextContent(
-            type="text", text=f"Error: directory not found at {chunks_dir}"
-        )
     if "localhost" not in params.database_uri:
         return mcp.types.TextContent(
             type="text",
             text="Error: database URI must be outside "
             "docker like 'localhost' or '127.0.0.1' or '0.0.0.0'",
         )
+
+    # Determine files to load based on chunks_path
+    json_files: list[Path] = []
+
+    # Check if it's a comma-separated list
+    if "," in chunks_path:
+        file_paths = [p.strip() for p in chunks_path.split(",")]
+        for file_path_str in file_paths:
+            file_path = Path(file_path_str)
+            if file_path.exists() and file_path.is_file() and file_path.suffix == ".json":
+                json_files.append(file_path)
+    # Check if it's a single file
+    elif Path(chunks_path).is_file():
+        file_path = Path(chunks_path)
+        if file_path.suffix == ".json":
+            json_files.append(file_path)
+        else:
+            return mcp.types.TextContent(
+                type="text", text=f"Error: file must be JSON, got {file_path.suffix}"
+            )
+    # Check if it's a directory
+    elif Path(chunks_path).is_dir():
+        dir_path = Path(chunks_path)
+        json_files = sorted([f for f in dir_path.iterdir() if f.is_file() and f.suffix == ".json"])
+    else:
+        return mcp.types.TextContent(type="text", text=f"Error: path not found: {chunks_path}")
+
+    if not json_files:
+        return mcp.types.TextContent(
+            type="text", text=f"Error: no JSON files found in {chunks_path}"
+        )
+
     try:
         embeddings = create_embedder(params.embedder_type)
         loader = create_vectorstore_loader(
@@ -136,21 +170,14 @@ async def vectorstore_load(
             type="text", text=f"Unexpected error during initialization: {e}"
         )
 
-    # Загружаем файлы по одному для детального отслеживания
+    # Load files one by one for detailed tracking
     total_chunks_loaded = 0
     successful_files: list[tuple[str, int]] = []  # (filename, chunk_count)
     failed_files: list[tuple[str, str]] = []  # (filename, error_message)
 
-    json_files = sorted([f for f in dir_path.iterdir() if f.is_file()])
-
-    if not json_files:
-        return mcp.types.TextContent(
-            type="text", text=f"Error: no JSON files found in {chunks_dir}"
-        )
-
     for file in json_files:
         try:
-            # Читаем и парсим JSON файл
+            # Read and parse JSON file
             with file.open("r", encoding="utf-8") as f:
                 chunks = json.load(f)
 
@@ -158,7 +185,7 @@ async def vectorstore_load(
                 failed_files.append((file.name, f"expected list, got {type(chunks).__name__}"))
                 continue
 
-            # Конвертируем chunks в Document объекты
+            # Convert chunks to Document objects
             documents: list[Document] = []
             for chunk_data in chunks:
                 if not isinstance(chunk_data, dict) or "page_content" not in chunk_data:

@@ -88,6 +88,17 @@ def kv_get(db: DB, key: str) -> str | None:
         return None if obj is None else obj.value
 
 
+def kv_delete(db: DB, key: str) -> bool:
+    """Delete a key-value pair. Returns True if deleted, False if not found."""
+    with Session(db._engine) as session:
+        obj = session.get(KV, key)
+        if obj is None:
+            return False
+        session.delete(obj)
+        session.commit()
+        return True
+
+
 def kv_all(db: DB) -> Iterable[tuple[str, str]]:
     with Session(db._engine) as session:
         rows = session.exec(select(KV).order_by(KV.key)).all()

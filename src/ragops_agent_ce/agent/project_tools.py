@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import shutil
 import uuid
+from pathlib import Path
 from typing import Any
 
-from ..db import close, kv_all_by_prefix, kv_get, kv_set, open_db
+from ..db import close, kv_all_by_prefix, kv_delete, kv_get, kv_set, open_db
 from ..schemas.config_schemas import RagConfig
 from .tools import AgentTool
 
@@ -36,6 +38,7 @@ def tool_create_project() -> AgentTool:
                 "configuration": None,
                 "chunks_path": None,
                 "collection_name": None,
+                "loaded_files": [],  # List of files loaded into vectorstore with metadata
             }
             kv_set(db, key, json.dumps(project_state))
             return f"Successfully created project '{project_id}'."
@@ -260,6 +263,199 @@ def tool_get_rag_config() -> AgentTool:
                 "project_id": {
                     "type": "string",
                     "description": "The ID of the project to get configuration from.",
+                },
+            },
+            "required": ["project_id"],
+        },
+        handler=handler,
+    )
+
+
+def tool_add_loaded_files() -> AgentTool:
+    def handler(payload: dict[str, Any]) -> str:
+        project_id = payload.get("project_id")
+        files = payload.get("files")  # List of file paths or dicts with metadata
+
+        if not project_id:
+            return "Error: project_id is required."
+        if not files:
+            return "Error: files list is required."
+
+        db = open_db()
+        try:
+            key = _project_key(project_id)
+            state_raw = kv_get(db, key)
+            if state_raw is None:
+                return f"Error: Project '{project_id}' not found."
+
+            state = json.loads(state_raw)
+            loaded_files = state.get("loaded_files", [])
+
+            # Add new files
+            added_count = 0
+            for file_item in files:
+                # Ensure file_item is a dict with at least 'path'
+                if isinstance(file_item, str):
+                    file_info = {"path": file_item, "status": "loaded"}
+                else:
+                    file_info = dict(file_item)
+                    # Set default status if not provided
+                    if "status" not in file_info:
+                        file_info["status"] = "loaded"
+
+                file_path = file_info.get("path")
+                if not file_path:
+                    continue
+
+                # Check if already exists
+                if not any(f.get("path") == file_path for f in loaded_files):
+                    loaded_files.append(file_info)
+                    added_count += 1
+
+            state["loaded_files"] = loaded_files
+            kv_set(db, key, json.dumps(state))
+
+            return f"Added {added_count} file(s) to loaded files for project '{project_id}'."
+        finally:
+            close(db)
+
+    return AgentTool(
+        name="add_loaded_files",
+        description=(
+            "Add files to the list of loaded files for a project. "
+            "This tracks which files have been loaded into vectorstore. "
+            "Call this AFTER successfully loading chunks into vector database. "
+            "IMPORTANT: Pass specific file paths (e.g., ['file1.json', 'file2.json']), "
+            "NOT directory paths. Get file list from chunked directory first."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The ID of the project.",
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "description": "File path (required)",
+                            },
+                            "status": {
+                                "type": "string",
+                                "description": "Status (optional, default: 'loaded')",
+                            },
+                            "chunks_count": {
+                                "type": "number",
+                                "description": "Number of chunks (optional)",
+                            },
+                        },
+                        "required": ["path"],
+                    },
+                    "description": "List of file metadata objects with at least 'path' field.",
+                },
+            },
+            "required": ["project_id", "files"],
+        },
+        handler=handler,
+    )
+
+
+def tool_list_loaded_files() -> AgentTool:
+    def handler(payload: dict[str, Any]) -> str:
+        project_id = payload.get("project_id")
+        if not project_id:
+            return "Error: project_id is required."
+
+        db = open_db()
+        try:
+            key = _project_key(project_id)
+            state_raw = kv_get(db, key)
+            if state_raw is None:
+                return f"Error: Project '{project_id}' not found."
+
+            state = json.loads(state_raw)
+            loaded_files = state.get("loaded_files", [])
+
+            return json.dumps({"loaded_files": loaded_files}, indent=2)
+        finally:
+            close(db)
+
+    return AgentTool(
+        name="list_loaded_files",
+        description=(
+            "Get the list of files loaded into vectorstore for a project. "
+            "Use this to check which files are already in the RAG system "
+            "before loading new files incrementally."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The ID of the project.",
+                },
+            },
+            "required": ["project_id"],
+        },
+        handler=handler,
+    )
+
+
+def tool_delete_project() -> AgentTool:
+    def handler(payload: dict[str, Any]) -> str:
+        project_id = payload.get("project_id")
+        if not project_id:
+            return "Error: project_id is required."
+
+        db = open_db()
+        try:
+            key = _project_key(project_id)
+            state_raw = kv_get(db, key)
+            if state_raw is None:
+                return f"Error: Project '{project_id}' not found."
+
+            # Delete from database
+            deleted = kv_delete(db, key)
+            if not deleted:
+                return f"Error: Failed to delete project '{project_id}' from database."
+
+            # Delete project directory
+            project_dir = Path(f"projects/{project_id}").resolve()
+            if project_dir.exists():
+                try:
+                    shutil.rmtree(project_dir)
+                except Exception as e:
+                    return f"Warning: Deleted from DB but failed to delete directory: {e}"
+
+            # Delete checklist file
+            checklist_file = Path(f"ragops_checklists/checklist_{project_id}.json")
+            if checklist_file.exists():
+                try:
+                    checklist_file.unlink()
+                except Exception:
+                    pass  # Optional cleanup
+
+            return f"Successfully deleted project '{project_id}' and all related files."
+        finally:
+            close(db)
+
+    return AgentTool(
+        name="delete_project",
+        description=(
+            "Deletes a RAG project and all its related files "
+            "(database entry, project directory, checklist). "
+            "WARNING: This operation cannot be undone!"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The ID of the project to delete.",
                 },
             },
             "required": ["project_id"],

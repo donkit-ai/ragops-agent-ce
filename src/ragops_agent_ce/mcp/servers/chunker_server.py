@@ -13,8 +13,16 @@ load_dotenv()
 
 
 class ChunkDocumentsArgs(BaseModel):
-    source_path: str = Field(description="Path to the source directory")
+    source_path: str = Field(description="Path to the source directory with processed documents")
+    project_id: str = Field(
+        description="Project ID to store chunked documents "
+        "in projects/<project_id>/processed/chunked/"
+    )
     params: ChunkerConfig
+    incremental: bool = Field(
+        default=True,
+        description=("If True, only process new/modified files. " "If False, reprocess all files."),
+    )
 
 
 server = mcp.server.FastMCP(
@@ -28,32 +36,56 @@ server = mcp.server.FastMCP(
     description=(
         "Reads documents from given paths, "
         "splits them into smaller text chunks, "
-        "and returns the path to a JSON file with the result. "
-        "Support only text file eg. .txt, .json"
+        "and saves to projects/<project_id>/processed/chunked/. "
+        "Supports incremental processing - only new/modified files. "
+        "Support only text files eg. .txt, .json"
     ).strip(),
 )
 async def chunk_documents(args: ChunkDocumentsArgs) -> mcp.types.TextContent:
-    # Create a directory for output if it doesn't exist
     chunker = DonkitChunker(args.params)
-    results = {"output_path": "", "successful": [], "failed": []}
-    output_path = Path(args.source_path) / "chunked"
-    output_path.mkdir(parents=True, exist_ok=True)
-    results["output_path"] = str(output_path)
-
     source_dir = Path(args.source_path)
-    if not source_dir.exists() or not source_dir.is_dir():
-        return mcp.types.TextContent(type="text", text="Error: path not found")
 
-    for file in source_dir.iterdir():
-        # Skip directories, process only files
-        if not file.is_file():
-            continue
+    if not source_dir.exists() or not source_dir.is_dir():
+        return mcp.types.TextContent(
+            type="text",
+            text=json.dumps({"status": "error", "message": f"Source path not found: {source_dir}"}),
+        )
+
+    # Create output directory in project
+    output_path = Path(f"projects/{args.project_id}/processed/chunked").resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    results = {
+        "status": "success",
+        "output_path": str(output_path),
+        "successful": [],
+        "failed": [],
+        "skipped": [],
+        "incremental": args.incremental,
+    }
+
+    # Get list of files to process
+    files_to_process = [f for f in source_dir.iterdir() if f.is_file()]
+
+    for file in files_to_process:
+        output_file = output_path / f"{file.name}.json"
+
+        # Check if we should skip this file (incremental mode)
+        if args.incremental and output_file.exists():
+            # Compare modification times
+            if file.stat().st_mtime <= output_file.stat().st_mtime:
+                results["skipped"].append(
+                    {
+                        "file": str(file),
+                        "reason": "File not modified since last chunking",
+                    }
+                )
+                continue
 
         try:
             chunked_documents = chunker.chunk_file(
                 file_path=str(file),
             )
-            output_file = output_path / f"{file.name}.json"
             payload = [
                 {"page_content": chunk.page_content, "metadata": chunk.metadata}
                 for chunk in chunked_documents
@@ -70,6 +102,13 @@ async def chunk_documents(args: ChunkDocumentsArgs) -> mcp.types.TextContent:
             )
         except Exception as e:
             results["failed"].append({"file": str(file), "error": str(e)})
+
+    # Add summary
+    results["message"] = (
+        f"Processed: {len(results['successful'])}, "
+        f"Skipped: {len(results['skipped'])}, "
+        f"Failed: {len(results['failed'])}"
+    )
 
     # Return results as JSON string
     return mcp.types.TextContent(

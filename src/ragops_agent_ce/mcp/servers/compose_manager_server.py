@@ -189,6 +189,7 @@ server = mcp.server.FastMCP(
 
 
 def generate_env_file(
+    project_id: str,
     rag_config: RagConfig | None,
     llm_provider: str | None,
     llm_model: str | None,
@@ -209,6 +210,12 @@ def generate_env_file(
         "# RagOps Agent CE - Docker Compose Environment Variables",
         "# =============================================================================",
         "# Generated automatically by ragops-compose-manager",
+        "",
+        "# -----------------------------------------------------------------------------",
+        "# Project Configuration",
+        "# -----------------------------------------------------------------------------",
+        "",
+        f"PROJECT_ID={project_id}",
         "",
         "# -----------------------------------------------------------------------------",
         "# LLM Provider Credentials",
@@ -405,6 +412,7 @@ async def init_project_compose(args: InitProjectComposeArgs) -> mcp.types.TextCo
 
     # Generate .env file with RAG configuration
     env_content = generate_env_file(
+        project_id=args.project_id,
         rag_config=args.rag_config,
         llm_provider=os.getenv("RAGOPS_LLM_PROVIDER"),
         llm_model=os.getenv("RAGOPS_LLM_MODEL"),
@@ -750,12 +758,23 @@ async def service_status(args: ServiceStatusArgs) -> mcp.types.TextContent:
                 **run_kwargs,
             )
 
-            if result.returncode == 0 and result.stdout:
-                containers = (
-                    json.loads(result.stdout)
-                    if result.stdout.startswith("[")
-                    else [json.loads(result.stdout)]
-                )
+            if result.returncode == 0 and result.stdout.strip():
+                # docker-compose ps --format json can return:
+                # - Array: [{"Name": ...}, ...]
+                # - Single object: {"Name": ...}
+                # - NDJSON (newline delimited): {"Name": ...}\n{"Name": ...}
+                stdout = result.stdout.strip()
+
+                if stdout.startswith("["):
+                    # Array format
+                    containers = json.loads(stdout)
+                elif "\n" in stdout:
+                    # NDJSON format - multiple JSON objects separated by newlines
+                    containers = [json.loads(line) for line in stdout.split("\n") if line.strip()]
+                else:
+                    # Single JSON object
+                    containers = [json.loads(stdout)]
+
                 statuses.append(
                     {
                         "service": svc,
@@ -809,6 +828,7 @@ async def get_logs(args: GetLogsArgs) -> mcp.types.TextContent:
             "logs",
             "--tail",
             str(tail),
+            service,  # Add service name to get logs for specific service
         ]
     )
 

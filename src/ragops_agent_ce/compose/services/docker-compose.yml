@@ -123,7 +123,7 @@ services:
   rag-service:
     image: donkitai/rag-service:latest
     pull_policy: always
-    container_name: rag-service
+    container_name: ${PROJECT_ID:-default}
     profiles:
       - rag-service
       - full-stack

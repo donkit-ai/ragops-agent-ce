@@ -8,9 +8,12 @@ from ..llm.base import LLMProvider
 from ..llm.types import Message, ToolSpec
 from ..mcp.client import MCPClient
 from .project_tools import (
+    tool_add_loaded_files,
     tool_create_project,
+    tool_delete_project,
     tool_get_project,
     tool_get_rag_config,
+    tool_list_loaded_files,
     tool_list_projects,
     tool_save_rag_config,
 )
@@ -26,8 +29,11 @@ def default_tools() -> list[AgentTool]:
         tool_create_project(),
         tool_get_project(),
         tool_list_projects(),
+        tool_delete_project(),
         tool_save_rag_config(),
         tool_get_rag_config(),
+        tool_add_loaded_files(),
+        tool_list_loaded_files(),
     ]
 
 

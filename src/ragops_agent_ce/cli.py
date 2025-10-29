@@ -207,6 +207,33 @@ def _time_str() -> str:
     return "[dim]" + time.strftime("[%H:%M]", time.localtime()) + "[/]"
 
 
+def _render_markdown_to_rich(text: str) -> str:
+    """Convert markdown text to simple Rich markup without breaking formatting."""
+    # Simple markdown to rich markup conversion without full rendering
+    # This preserves the transcript panel formatting
+
+    import re
+
+    # Bold: **text** -> [bold]text[/bold]
+    result = re.sub(r"\*\*(.+?)\*\*", r"[bold]\1[/bold]", text)
+
+    # Italic: *text* -> [italic]text[/italic] (but don't match list items)
+    result = re.sub(r"(?<!\*)\*([^\*\n]+?)\*(?!\*)", r"[italic]\1[/italic]", result)
+
+    # Inline code: `text` -> [cyan]text[/cyan]
+    result = re.sub(r"`(.+?)`", r"[cyan]\1[/cyan]", result)
+
+    # Headers: ## text -> [bold cyan]text[/bold cyan]
+    result = re.sub(r"^#+\s+(.+)$", r"[bold cyan]\1[/bold cyan]", result, flags=re.MULTILINE)
+
+    # List items: - text or * text -> • text (with proper indentation preserved)
+    result = re.sub(r"^(\s*)[*-]\s+", r"\1• ", result, flags=re.MULTILINE)
+
+    # Numbered lists: 1. text -> 1. text (keep as is)
+
+    return result
+
+
 def _start_repl(
     *,
     system: str | None,
@@ -271,11 +298,14 @@ def _start_repl(
         + (f", model override: {model}" if model else "")
     )
     transcript.append("[enhanced input enabled]" if READLINE_AVAILABLE else "[basic input mode]")
-    transcript.append(
-        f"{_time_str()} [bold green]RagOps Agent>[/bold green] Hello! "
-        "I'm Donkit - RagOps Agent, your assistant for building RAG pipelines. "
+
+    # Render welcome message as markdown
+    welcome_msg = (
+        "Hello! I'm **Donkit - RagOps Agent**, your assistant for building RAG pipelines. "
         "How can I help you today?"
     )
+    rendered_welcome = _render_markdown_to_rich(welcome_msg)
+    transcript.append(f"{_time_str()} [bold green]RagOps Agent>[/bold green] {rendered_welcome}")
     watcher = None
     if show_checklist:
         watcher = ChecklistWatcherWithRenderer(
@@ -336,6 +366,11 @@ def _start_repl(
             history.append(Message(role="user", content=user_input))
             reply = agent.respond(history, model=model)
             history.append(Message(role="assistant", content=reply))
-            transcript.append(f"{_time_str()} [bold green]RagOps Agent>[/bold green] {reply}")
+
+            # Render markdown reply
+            rendered_reply = _render_markdown_to_rich(reply)
+            transcript.append(
+                f"{_time_str()} [bold green]RagOps Agent>[/bold green] {rendered_reply}"
+            )
         except Exception as e:
             transcript.append(f"{_time_str()} [bold red]Error:[/bold red] {str(e)}")

@@ -21,7 +21,7 @@ def _list_checklists() -> list[tuple[str, float]]:
         return []
 
     checklists: list[tuple[str, float]] = []
-    for file_path in checklist_dir.glob("checklist_*.json"):
+    for file_path in checklist_dir.glob("*.json"):
         try:
             mtime = file_path.stat().st_mtime
             checklists.append((str(file_path.name), mtime))

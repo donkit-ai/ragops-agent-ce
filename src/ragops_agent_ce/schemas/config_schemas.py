@@ -146,9 +146,6 @@ class RetrieverOptions(BaseModel):
             "collection name must be an underscore or letter ."
         ),
     )
-    filename_search: bool = Field(
-        default=False, description="Enable filename search(not implemented)"
-    )
     composite_query_detection: bool = Field(
         default=False, description="Split composite query into several simple questions"
     )
@@ -170,7 +167,13 @@ class RagConfig(BaseModel):
     Unified RAG configuration schema.
     """
 
-    files_path: str = Field(description="Path to the folder with files")
+    files_path: str = Field(
+        description=(
+            "Path to the folder with processed documents. "
+            "This directory is created after document processing (process_documents tool). "
+            "Format: projects/<project_id>/processed/"
+        )
+    )
     generation_prompt: str = Field(
         default=DEFAULT_PROMPT,
         description="Prompt for generation model. Generate you own based on project goal.",
