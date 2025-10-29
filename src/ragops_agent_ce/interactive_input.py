@@ -51,14 +51,13 @@ class InteractiveInputBox:
             content.append(text[:cursor], style="white")
             content.append("█", style="white")  # Cursor
             content.append(text[cursor:], style="white")
+        elif not text:  # Add hint if empty
+            content.append("T", style="black on white")
+            content.append("ype your message... ", style="dim")
+            content.append("(:q to quit)", style="yellow dim")
         else:
             content.append(text, style="white")
             content.append("█", style="white")  # Cursor at end
-
-        # Add hint if empty
-        if not text:
-            content.append("Type your message... ", style="dim")
-            content.append("(:q to quit)", style="yellow dim")
 
         return Panel(
             content,
@@ -161,12 +160,13 @@ def get_user_input() -> str:
     Raises:
         KeyboardInterrupt: When user presses Ctrl+C or Ctrl+D
     """
+    if TERMIOS_AVAILABLE:
+        input_box = InteractiveInputBox()
+        return input_box.get_input()
+
+    # Fallback for incompatible terminals
     console.print("[bold blue]you>[/bold blue] ", end="")
     try:
         return input().strip()
     except (EOFError, KeyboardInterrupt):
         raise
-
-    # Old interactive input box implementation (commented out)
-    # input_box = InteractiveInputBox()
-    # return input_box.get_input()

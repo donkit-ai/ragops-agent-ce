@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 
 from rich.align import Align
@@ -68,11 +69,7 @@ def render_screen_with_checklist(
         render_screen(transcript_lines, show_prompt=show_prompt)
         return
 
-    # Size panels to content (no terminal-height fill)
-    max_lines = min(len(transcript_lines) or 1, 200)
-    conv_panel = create_transcript_panel(
-        transcript_lines, title="Conversation", max_lines=max_lines
-    )
+    conv_panel = create_transcript_panel(transcript_lines, title="Conversation")
     checklist_panel = create_checklist_panel(checklist_text, title="Checklist")
 
     table = Table.grid(padding=(0, 2), expand=True)
@@ -112,33 +109,42 @@ def clear_screen_aggressive() -> None:
     sys.stdout.flush()
 
 
-def create_transcript_panel(
-    transcript_lines: list[str], title: str = "RagOpsAgent CE", max_lines: int = 30
-) -> Panel:
+def create_transcript_panel(transcript_lines: list[str], title: str = "RagOpsAgent CE") -> Panel:
     """
     Create a Rich panel for conversation transcript.
 
     Args:
         transcript_lines: List of transcript messages
         title: Panel title
-        max_lines: Maximum lines to display (shows recent messages)
 
     Returns:
         Panel: Rich panel containing the transcript
     """
-    if not transcript_lines:
-        content = Text("No messages yet. Start by typing a message!", style="dim italic")
-    else:
-        # Show most recent messages if transcript is too long
-        recent_lines = (
-            transcript_lines[-max_lines:] if len(transcript_lines) > max_lines else transcript_lines
-        )
+    lines = transcript_lines or ["[dim italic]No messages yet. Start by typing a message![/]"]
+    width, height = shutil.get_terminal_size()
+    visible_height = height - 6
 
-        # Join lines and parse Rich markup properly
-        transcript_text = "\n".join(recent_lines)
-        content = Text.from_markup(transcript_text)
-        # Ensure wrapping for long lines
-        content.overflow = "fold"
+    # Effective text width inside panel (minus padding and borders)
+    inner_width = max(width - 4, 10)  # 2 borders + 2 padding (примерно)
+
+    wrapped_lines: list[Text] = []
+    for line in lines:
+        rich_text = Text.from_markup(line)
+        wrapped_parts = rich_text.wrap(console, inner_width)
+        wrapped_lines.extend(wrapped_parts or [Text("")])
+
+    # Высота
+    if len(wrapped_lines) < visible_height:
+        wrapped_lines = [Text("")] * (visible_height - len(wrapped_lines)) + wrapped_lines
+    else:
+        wrapped_lines = wrapped_lines[-visible_height:]
+
+    # Склеиваем в один Text
+    content = Text()
+    for i, part in enumerate(wrapped_lines):
+        if i > 0:
+            content.append("\n")
+        content.append(part)
 
     return Panel(
         content,
@@ -159,12 +165,9 @@ def render_screen(transcript_lines: list[str], *, show_prompt: bool = False) -> 
         show_prompt: Whether to reserve space for input prompt (affects panel height)
     """
     clear_screen_aggressive()
-
-    # Render conversation panel sized to content (no terminal-height fill)
-    max_lines = min(len(transcript_lines) or 1, 200)
     console.print(
         Padding(
-            create_transcript_panel(transcript_lines, title="Conversation", max_lines=max_lines),
+            create_transcript_panel(transcript_lines, title="Conversation"),
             (1, 0, 0, 0),
         )
     )
