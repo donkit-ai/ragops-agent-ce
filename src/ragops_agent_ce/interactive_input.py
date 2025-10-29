@@ -4,15 +4,20 @@ Interactive input module for RagOps Agent CE.
 Provides interactive input box functionality with real-time typing inside Rich panels.
 Follows Single Responsibility Principle - handles only user input interactions.
 """
-
-from __future__ import annotations
-
+import select
 import sys
+import time
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
+
+if TYPE_CHECKING:
+    import termios
+    import tty
+
 
 # Unix-only imports
 try:
@@ -39,25 +44,35 @@ class InteractiveInputBox:
     def __init__(self):
         self.current_text = ""
         self.cursor_pos = 0
+        self.cursor_visible = True
+        self.last_blink = time.time()
+        self.blink_interval = 0.5  # seconds
 
-    def _create_input_panel(self, text: str, cursor: int) -> Panel:
+    def _create_input_panel(self, text: str, cursor: int, show_cursor: bool) -> Panel:
         """Create input panel with current text and cursor."""
         content = Text()
         content.append("you", style="bold blue")
         content.append("> ", style="bold blue")
 
-        # Add text with cursor
         if cursor < len(text):
             content.append(text[:cursor], style="white")
-            content.append("█", style="white")  # Cursor
-            content.append(text[cursor:], style="white")
-        elif not text:  # Add hint if empty
-            content.append("T", style="black on white")
-            content.append("ype your message... ", style="dim")
+            if show_cursor:
+                # Blinking cursor
+                content.append(text[cursor], style="black on white")
+            else:
+                content.append(text[cursor], style="white")
+            content.append(text[cursor + 1 :], style="white")
+        elif not text:
+            if show_cursor:
+                content.append("T", style="black on white")
+                content.append("ype your message... ", style="dim")
+            else:
+                content.append("Type your message... ", style="dim")
             content.append("(:q to quit)", style="yellow dim")
         else:
             content.append(text, style="white")
-            content.append("█", style="white")  # Cursor at end
+            if show_cursor:
+                content.append("█", style="white")
 
         return Panel(
             content,
@@ -77,53 +92,65 @@ class InteractiveInputBox:
             return self._fallback_input()
 
     def _interactive_input(self) -> str:
-        """Interactive input box with real-time typing inside the box."""
-        # Fallback if termios is not available (e.g., on Windows)
-        if not TERMIOS_AVAILABLE:
-            raise ImportError("termios module not available on this platform")
+        if not sys.stdin.isatty():
+            raise ImportError("Not running in a terminal")
 
         self.current_text = ""
         self.cursor_pos = 0
+        self.cursor_visible = True
+        self.last_blink = time.time()
 
-        # Use Live for real-time updates
-        with Live(self._create_input_panel("", 0), console=console, refresh_per_second=4) as live:
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        tty.setcbreak(fd)
+
+        with Live(
+            self._create_input_panel("", 0, True),
+            console=console,
+            refresh_per_second=20,
+        ) as live:
             try:
-                # Get terminal settings
-                fd = sys.stdin.fileno()
-                old_settings = termios.tcgetattr(fd)
-                tty.setcbreak(fd)
-
                 while True:
-                    # Update display
-                    live.update(self._create_input_panel(self.current_text, self.cursor_pos))
+                    # Blink cursor
+                    now = time.time()
+                    if now - self.last_blink >= self.blink_interval:
+                        self.cursor_visible = not self.cursor_visible
+                        self.last_blink = now
 
-                    # Read character
-                    char = sys.stdin.read(1)
+                    live.update(
+                        self._create_input_panel(
+                            self.current_text, self.cursor_pos, self.cursor_visible
+                        )
+                    )
 
-                    if char == "\r" or char == "\n":  # Enter
+                    # Check input
+                    if sys.stdin in select.select([sys.stdin], [], [], 0.05)[0]:
+                        char = sys.stdin.read(1)
+                    else:
+                        continue
+
+                    if char in ("\r", "\n"):  # Enter
                         break
                     elif char == "\x03":  # Ctrl+C
                         raise KeyboardInterrupt
-                    elif char == "\x04":  # Ctrl+D (EOF)
+                    elif char == "\x04":  # Ctrl+D
                         raise KeyboardInterrupt
-                    elif char == "\x7f" or char == "\b":  # Backspace
+                    elif char in ("\x7f", "\b"):  # Backspace
                         if self.cursor_pos > 0:
                             self.current_text = (
                                 self.current_text[: self.cursor_pos - 1]
                                 + self.current_text[self.cursor_pos :]
                             )
                             self.cursor_pos -= 1
-                    elif char == "\x1b":  # Escape sequence (arrow keys)
+                    elif char == "\x1b":  # Arrows
                         next1 = sys.stdin.read(1)
                         next2 = sys.stdin.read(1)
                         if next1 == "[":
-                            if next2 == "D" and self.cursor_pos > 0:  # Left arrow
+                            if next2 == "D" and self.cursor_pos > 0:
                                 self.cursor_pos -= 1
-                            elif next2 == "C" and self.cursor_pos < len(
-                                self.current_text
-                            ):  # Right arrow
+                            elif next2 == "C" and self.cursor_pos < len(self.current_text):
                                 self.cursor_pos += 1
-                    elif len(char) == 1 and ord(char) >= 32:  # Printable character
+                    elif len(char) == 1 and ord(char) >= 32:
                         self.current_text = (
                             self.current_text[: self.cursor_pos]
                             + char
@@ -131,10 +158,7 @@ class InteractiveInputBox:
                         )
                         self.cursor_pos += 1
 
-            except KeyboardInterrupt:
-                raise
             finally:
-                # Restore terminal settings
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
         return self.current_text.strip()
