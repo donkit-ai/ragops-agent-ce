@@ -6,30 +6,6 @@ from dotenv import find_dotenv, load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Load environment variables from .env files.
-# Priority order per file location (earlier has higher priority):
-# 1) Project root alongside pyproject.toml (derived from this file path)
-#    - .env.local then .env
-# 2) Current working directory traversal (find_dotenv)
-
-# Prefer loading from project root (works even if CWD is different)
-try:
-    _pkg_dir = Path(__file__).resolve().parent  # .../src/ragops_agent_ce
-    _src_dir = _pkg_dir.parent  # .../src
-    _project_root = _src_dir.parent  # .../ragops-agent-ce
-    for _fname in (".env.local", ".env"):
-        _p = _project_root / _fname
-        if _p.exists():
-            load_dotenv(_p, override=True)
-except Exception:
-    pass
-
-# Additionally, load from CWD-based search as a fallback
-for _fname in (".env.local", ".env"):
-    _path = find_dotenv(filename=_fname, usecwd=True)
-    if _path:
-        load_dotenv(_path, override=True)
-
 
 class Settings(BaseSettings):
     """Application settings for RagOps Agent CE."""
@@ -69,4 +45,28 @@ class Settings(BaseSettings):
 
 
 def load_settings() -> Settings:
+    # Load environment variables from .env files.
+    # Priority order per file location (earlier has higher priority):
+    # 1) Project root alongside pyproject.toml (derived from this file path)
+    #    - .env.local then .env
+    # 2) Current working directory traversal (find_dotenv)
+
+    # Prefer loading from project root (works even if CWD is different)
+    try:
+        _pkg_dir = Path(__file__).resolve().parent  # .../src/ragops_agent_ce
+        _src_dir = _pkg_dir.parent  # .../src
+        _project_root = _src_dir.parent  # .../ragops-agent-ce
+        for _fname in (".env.local", ".env"):
+            _p = _project_root / _fname
+            if _p.exists():
+                load_dotenv(_p, override=True)
+    except Exception:
+        pass
+
+    # Additionally, load from CWD-based search as a fallback
+    for _fname in (".env.local", ".env"):
+        _path = find_dotenv(filename=_fname, usecwd=True)
+        if _path:
+            load_dotenv(_path, override=True)
+
     return Settings()
