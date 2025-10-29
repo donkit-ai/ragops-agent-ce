@@ -202,6 +202,11 @@ def _format_projects_for_transcript(projects: list[dict]) -> list[str]:
     return lines
 
 
+def _time_str() -> str:
+    """Get current time string for transcript."""
+    return "[dim]" + time.strftime("[%H:%M]", time.localtime()) + "[/]"
+
+
 def _start_repl(
     *,
     system: str | None,
@@ -267,7 +272,7 @@ def _start_repl(
     )
     transcript.append("[enhanced input enabled]" if READLINE_AVAILABLE else "[basic input mode]")
     transcript.append(
-        "[bold green] RagOps Agent> [/bold green]Hello! "
+        f"{_time_str()} [bold green]RagOps Agent>[/bold green] Hello! "
         "I'm Donkit - RagOps Agent, your assistant for building RAG pipelines. "
         "How can I help you today?"
     )
@@ -319,7 +324,7 @@ def _start_repl(
             renderer.render_goodbye_screen()
             break
 
-        transcript.append(f"[bold blue]you>[/bold blue] {escape(user_input)}")
+        transcript.append(f"{_time_str()} [bold blue]you>[/bold blue] {escape(user_input)}")
         _sanitize_transcript(transcript)
         cl_text = _get_session_checklist()
         if cl_text:
@@ -331,6 +336,6 @@ def _start_repl(
             history.append(Message(role="user", content=user_input))
             reply = agent.respond(history, model=model)
             history.append(Message(role="assistant", content=reply))
-            transcript.append(f"[bold green]RagOps Agent>[/bold green] {reply}")
+            transcript.append(f"{_time_str()} [bold green]RagOps Agent>[/bold green] {reply}")
         except Exception as e:
-            transcript.append(f"[bold red]Error:[/bold red] {str(e)}")
+            transcript.append(f"{_time_str()} [bold red]Error:[/bold red] {str(e)}")
