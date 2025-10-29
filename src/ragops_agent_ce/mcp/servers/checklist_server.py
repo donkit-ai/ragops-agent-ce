@@ -88,10 +88,23 @@ class UpdateChecklistItemArgs(BaseModel):
 
 @server.tool(
     name="create_checklist",
-    description="Creates a new checklist with a given name and list of tasks.",
+    description=(
+        "Creates a new checklist with a given name and list of tasks. "
+        "If checklist already exists, returns the existing one."
+    ),
 )
 @validate_call
 async def create_checklist(args: CreateChecklistArgs) -> mcp.types.TextContent:
+    # Check if checklist already exists
+    existing_checklist = _load_checklist(args.name)
+    if existing_checklist is not None:
+        return mcp.types.TextContent(
+            type="text",
+            text=f"Checklist '{args.name}' already exists. "
+            f"Returning existing checklist with {len(existing_checklist.items)} items.\n\n"
+            + existing_checklist.model_dump_json(indent=2),
+        )
+
     # Convert simple string items to ChecklistItem objects
     checklist_items = [
         ChecklistItem(id=f"item_{i}", description=item) for i, item in enumerate(args.items)
@@ -101,7 +114,8 @@ async def create_checklist(args: CreateChecklistArgs) -> mcp.types.TextContent:
     return mcp.types.TextContent(
         type="text",
         text=f"Checklist '{args.name}' created with "
-        f"{len(args.items)} items. Saved to {output_path}",
+        f"{len(args.items)} items. Saved to {output_path}\n\n"
+        + checklist.model_dump_json(indent=2),
     )
 
 
@@ -129,17 +143,33 @@ async def update_checklist_item(args: UpdateChecklistItemArgs) -> mcp.types.Text
     if checklist is None:
         return mcp.types.TextContent(type="text", text=f"Checklist '{args.name}' not found.")
 
-    found = False
-    for item in checklist.items:
+    # Find item index
+    item_index = None
+    for idx, item in enumerate(checklist.items):
         if item.id == args.item_id:
-            item.status = args.status
-            found = True
+            item_index = idx
             break
 
-    if not found:
+    if item_index is None:
         return mcp.types.TextContent(
             type="text", text=f"Item '{args.item_id}' not found in checklist '{args.name}'."
         )
+
+    # Validate sequential execution: can't start new item if previous ones aren't completed
+    if args.status == "in_progress" and item_index > 0:
+        for prev_idx in range(item_index):
+            prev_item = checklist.items[prev_idx]
+            if prev_item.status != "completed":
+                return mcp.types.TextContent(
+                    type="text",
+                    text=f"Cannot start item '{args.item_id}': "
+                    f"Previous item '{prev_item.id}' ({prev_item.description}) "
+                    f"is not completed (status: {prev_item.status}). "
+                    f"Please complete previous items first.",
+                )
+
+    # Update status
+    checklist.items[item_index].status = args.status
 
     _save_checklist(checklist)
     return mcp.types.TextContent(
