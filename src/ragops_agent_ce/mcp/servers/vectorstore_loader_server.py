@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 import mcp
@@ -52,7 +53,7 @@ def create_embedder(embedder_type: str) -> Embeddings:
     if embedder_type == "openai":
         api_key, base_url, model = __check_openai()
         return OpenAIEmbeddings(
-            api_key=api_key,
+            api_key=api_key,  # noqa
             openai_api_base=base_url,
             model=model or "text-embedding-3-small",
         )
@@ -76,7 +77,7 @@ def create_embedder(embedder_type: str) -> Embeddings:
 
 
 class VectorstoreParams(BaseModel):
-    backend: str = Field(default="qdrant")
+    backend: Literal["qdrant", "chroma", "milvus"] = Field(default="qdrant")
     embedder_type: str = Field(default="vertex")
     collection_name: str = Field(
         default="my_collection", description="Use just project id, not 'ragops_<project_id>'"

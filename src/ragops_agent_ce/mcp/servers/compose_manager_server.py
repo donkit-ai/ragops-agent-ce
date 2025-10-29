@@ -13,6 +13,7 @@ import base64
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -44,19 +45,26 @@ AVAILABLE_SERVICES = {
         "ports": ["6333:6333", "6334:6334"],
         "url": "http://localhost:6333",
     },
+    "chroma": {
+        "name": "chroma",
+        "description": "Chroma vector database for RAG",
+        "profile": "chroma",
+        "ports": ["8015:8000"],
+        "url": "http://localhost:8015",
+    },
+    "milvus": {
+        "name": "milvus",
+        "description": "Milvus vector database for RAG",
+        "profile": "milvus",
+        "ports": ["19530:19530", "9091:9091"],
+        "url": "http://localhost:19530",
+    },
     "rag-service": {
         "name": "rag-service",
         "description": "RAG Query service",
         "profile": "rag-service",
         "ports": ["8000:8000"],
         "url": "http://localhost:8000",
-    },
-    "full-stack": {
-        "name": "full-stack",
-        "description": "Full RAG stack (Qdrant + RAG Service)",
-        "profile": "full-stack",
-        "ports": ["6333:6333", "8000:8000"],
-        "url": "Multiple services",
     },
 }
 
@@ -285,16 +293,25 @@ class InitProjectComposeArgs(BaseModel):
     def _set_default_collection_name(self) -> "InitProjectComposeArgs":
         """Ensure retriever_options.collection_name is set.
         If missing/empty, use project_id as a sensible default.
+        For Milvus, ensure collection name starts with underscore or letter.
         """
         if not getattr(self.rag_config.retriever_options, "collection_name", None):
             self.rag_config.retriever_options.collection_name = self.project_id
+
+        # Fix collection name for Milvus if needed
+        if self.rag_config.db_type == "milvus":
+            collection_name = self.rag_config.retriever_options.collection_name
+            if not re.match(r"^[a-zA-Z_]", collection_name):
+                self.rag_config.retriever_options.collection_name = f"_{collection_name}"
         return self
 
 
 class ServicePort(BaseModel):
     """Custom port mapping for a service."""
 
-    service: Literal["qdrant", "rag-service"] = Field(description="Service name")
+    service: Literal["qdrant", "chroma", "milvus", "rag-service"] = Field(
+        description="Service name"
+    )
     port: str = Field(
         description="Host port mapping in format 'host_port:container_port' (e.g., '6335:6333') "
         "or just host port (e.g., '6335')"
@@ -302,8 +319,8 @@ class ServicePort(BaseModel):
 
 
 class StartServiceArgs(BaseModel):
-    service: Literal["qdrant", "rag-service", "full-stack"] = Field(
-        description="Service name (qdrant, rag-service, full-stack)"
+    service: Literal["qdrant", "chroma", "milvus", "rag-service"] = Field(
+        description="Service name (qdrant, chroma, milvus, rag-service)"
     )
     project_id: str = Field(description="Project ID")
     detach: bool = Field(True, description="Run in detached mode")
@@ -489,6 +506,8 @@ async def start_service(args: StartServiceArgs) -> mcp.types.TextContent:
         port_map = {sp.service: sp.port for sp in args.custom_ports}
 
         # For qdrant: QDRANT_PORT_HTTP and QDRANT_PORT_GRPC
+        # For chroma: CHROMA_PORT
+        # For milvus: MILVUS_PORT and MILVUS_METRICS_PORT
         # For rag-service: RAG_SERVICE_PORT
         if service == "qdrant" and "qdrant" in port_map:
             port_mapping = port_map["qdrant"]
@@ -497,24 +516,23 @@ async def start_service(args: StartServiceArgs) -> mcp.types.TextContent:
                 env["QDRANT_PORT_HTTP"] = host_port
                 # Assume GRPC port is HTTP port + 1
                 env["QDRANT_PORT_GRPC"] = str(int(host_port) + 1)
+        elif service == "chroma" and "chroma" in port_map:
+            port_mapping = port_map["chroma"]
+            if ":" in port_mapping:
+                host_port = port_mapping.split(":")[0]
+                env["CHROMA_PORT"] = host_port
+        elif service == "milvus" and "milvus" in port_map:
+            port_mapping = port_map["milvus"]
+            if ":" in port_mapping:
+                host_port = port_mapping.split(":")[0]
+                env["MILVUS_PORT"] = host_port
+                # Assume metrics port is main port + 1
+                env["MILVUS_METRICS_PORT"] = str(int(host_port) + 1)
         elif service == "rag-service" and "rag-service" in port_map:
             port_mapping = port_map["rag-service"]
             if ":" in port_mapping:
                 host_port = port_mapping.split(":")[0]
                 env["RAG_SERVICE_PORT"] = host_port
-        elif service == "full-stack":
-            # Apply both if available
-            if "qdrant" in port_map:
-                port_mapping = port_map["qdrant"]
-                if ":" in port_mapping:
-                    host_port = port_mapping.split(":")[0]
-                    env["QDRANT_PORT_HTTP"] = host_port
-                    env["QDRANT_PORT_GRPC"] = str(int(host_port) + 1)
-            if "rag-service" in port_map:
-                port_mapping = port_map["rag-service"]
-                if ":" in port_mapping:
-                    host_port = port_mapping.split(":")[0]
-                    env["RAG_SERVICE_PORT"] = host_port
 
     try:
         # Don't use cwd on Windows with WSL2 Docker - paths are already absolute
@@ -543,6 +561,16 @@ async def start_service(args: StartServiceArgs) -> mcp.types.TextContent:
                     port_mapping = port_map["qdrant"]
                     host_port = port_mapping.split(":")[0] if ":" in port_mapping else port_mapping
                     ports = [port_mapping, f"{int(host_port)+1}:6334"]
+                    url = f"http://localhost:{host_port}"
+                elif service == "chroma" and "chroma" in port_map:
+                    port_mapping = port_map["chroma"]
+                    host_port = port_mapping.split(":")[0] if ":" in port_mapping else port_mapping
+                    ports = [port_mapping]
+                    url = f"http://localhost:{host_port}"
+                elif service == "milvus" and "milvus" in port_map:
+                    port_mapping = port_map["milvus"]
+                    host_port = port_mapping.split(":")[0] if ":" in port_mapping else port_mapping
+                    ports = [port_mapping, f"{int(host_port)+1}:9091"]
                     url = f"http://localhost:{host_port}"
                 elif service == "rag-service" and "rag-service" in port_map:
                     port_mapping = port_map["rag-service"]

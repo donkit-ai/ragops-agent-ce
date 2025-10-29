@@ -139,7 +139,12 @@ class RetrieverOptions(BaseModel):
 
     collection_name: str | None = Field(
         default=None,
-        description="Collection name to use in vector DB. If not provided, defaults to project_id.",
+        description=(
+            "Collection name to use in vector DB. "
+            "If not provided, defaults to project_id."
+            "For 'milvus' the first character of a "
+            "collection name must be an underscore or letter ."
+        ),
     )
     filename_search: bool = Field(
         default=False, description="Enable filename search(not implemented)"
@@ -181,6 +186,4 @@ class RagConfig(BaseModel):
     generation_model_name: str = Field(
         description="Generation model name. must be model of selected generation model type"
     )
-    database_uri: str = Field(
-        default="http://qdrant:6333", description="Vector database URI inside DOCKER"
-    )
+    database_uri: str = Field(description="Vector database URI inside DOCKER")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 import mcp
 from dotenv import load_dotenv
@@ -19,9 +20,16 @@ class RagConfigPlanArgs(BaseModel):
     def _set_default_collection_name(self) -> RagConfigPlanArgs:
         """Ensure retriever_options.collection_name is set.
         If missing/empty, use project_id as a sensible default.
+        For Milvus, ensure collection name starts with underscore or letter.
         """
         if not getattr(self.rag_config.retriever_options, "collection_name", None):
             self.rag_config.retriever_options.collection_name = self.project_id
+
+        # Fix collection name for Milvus if needed
+        if self.rag_config.db_type == "milvus":
+            collection_name = self.rag_config.retriever_options.collection_name
+            if not re.match(r"^[a-zA-Z_]", collection_name):
+                self.rag_config.retriever_options.collection_name = f"_{collection_name}"
         return self
 
 
