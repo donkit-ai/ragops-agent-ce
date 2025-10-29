@@ -1,0 +1,156 @@
+import json
+import os
+from pathlib import Path
+from typing import List, Literal, Optional
+
+import mcp
+from dotenv import load_dotenv
+from pydantic import BaseModel, Field, validate_call
+
+load_dotenv()
+
+
+class ChecklistItem(BaseModel):
+    """Single checklist task item."""
+
+    id: str = Field(
+        ..., description="Stable item identifier (e.g., 'item_0'). Used to update status later."
+    )
+    description: str = Field(
+        ..., description="Human-readable task description (what needs to be done)."
+    )
+    status: Literal["pending", "in_progress", "completed", "failed"] = Field(
+        default="pending",
+        description="Item status: one of 'pending', 'in_progress', 'completed', 'failed'.",
+    )
+
+
+class Checklist(BaseModel):
+    """Checklist with a name and ordered list of items."""
+
+    name: str = Field(
+        ..., description="Unique checklist name; used as the JSON filename without extension."
+    )
+    items: List[ChecklistItem] = Field(
+        ..., description="Ordered list of checklist items. IDs are stable across updates."
+    )
+
+
+server = mcp.server.FastMCP(
+    "rag-checklist",
+    log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
+)
+
+
+def _save_checklist(checklist: Checklist) -> str:
+    output_dir = Path("./ragops_checklists")
+    output_dir.mkdir(exist_ok=True)
+    output_path = output_dir / f"{checklist.name}.json"
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(checklist.model_dump(), f, indent=2)
+    return str(output_path)
+
+
+def _load_checklist(name: str) -> Optional[Checklist]:
+    output_path = Path("./ragops_checklists") / f"{name}.json"
+    if not output_path.exists():
+        return None
+    with open(output_path, encoding="utf-8") as f:
+        data = json.load(f)
+        return Checklist(**data)
+
+
+# ========= Pydantic argument schemas =========
+class CreateChecklistArgs(BaseModel):
+    """Arguments for create_checklist tool."""
+
+    name: str = Field(..., description="Unique checklist name. Will be used as '<name>.json' file.")
+    items: List[str] = Field(
+        ..., description="List of task descriptions. IDs will be auto-generated as 'item_<index>'."
+    )
+
+
+class GetChecklistArgs(BaseModel):
+    """Arguments for get_checklist tool."""
+
+    name: str = Field(..., description="Checklist name to load (without '.json').")
+
+
+class UpdateChecklistItemArgs(BaseModel):
+    """Arguments for update_checklist_item tool."""
+
+    name: str = Field(..., description="Checklist name that contains the item (without '.json').")
+    item_id: str = Field(..., description="ID of the item to update (e.g., 'item_0').")
+    status: Literal["pending", "in_progress", "completed", "failed"] = Field(
+        ..., description="New status value to set for the item."
+    )
+
+
+@server.tool(
+    name="create_checklist",
+    description="Creates a new checklist with a given name and list of tasks.",
+)
+@validate_call
+async def create_checklist(args: CreateChecklistArgs) -> mcp.types.TextContent:
+    # Convert simple string items to ChecklistItem objects
+    checklist_items = [
+        ChecklistItem(id=f"item_{i}", description=item) for i, item in enumerate(args.items)
+    ]
+    checklist = Checklist(name=args.name, items=checklist_items)
+    output_path = _save_checklist(checklist)
+    return mcp.types.TextContent(
+        type="text",
+        text=f"Checklist '{args.name}' created with "
+        f"{len(args.items)} items. Saved to {output_path}",
+    )
+
+
+@server.tool(
+    name="get_checklist",
+    description="Retrieves the current state of a checklist by its name as a JSON string.",
+)
+@validate_call
+async def get_checklist(args: GetChecklistArgs) -> mcp.types.TextContent:
+    checklist = _load_checklist(args.name)
+    if checklist is None:
+        return mcp.types.TextContent(type="text", text=f"Checklist '{args.name}' not found.")
+
+    # Return the full checklist as a JSON string to provide all details, including IDs
+    return mcp.types.TextContent(type="text", text=checklist.model_dump_json(indent=2))
+
+
+@server.tool(
+    name="update_checklist_item",
+    description="Updates the status of a specific item in a checklist.",
+)
+@validate_call
+async def update_checklist_item(args: UpdateChecklistItemArgs) -> mcp.types.TextContent:
+    checklist = _load_checklist(args.name)
+    if checklist is None:
+        return mcp.types.TextContent(type="text", text=f"Checklist '{args.name}' not found.")
+
+    found = False
+    for item in checklist.items:
+        if item.id == args.item_id:
+            item.status = args.status
+            found = True
+            break
+
+    if not found:
+        return mcp.types.TextContent(
+            type="text", text=f"Item '{args.item_id}' not found in checklist '{args.name}'."
+        )
+
+    _save_checklist(checklist)
+    return mcp.types.TextContent(
+        type="text",
+        text=f"Updated item '{args.item_id}' in checklist '{args.name}' to status '{args.status}'.",
+    )
+
+
+def main() -> None:
+    server.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
