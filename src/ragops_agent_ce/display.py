@@ -121,8 +121,7 @@ def create_transcript_panel(transcript_lines: list[str], title: str = "RagOpsAge
         Panel: Rich panel containing the transcript
     """
     lines = transcript_lines or ["[dim italic]No messages yet. Start by typing a message![/]"]
-    width, height = shutil.get_terminal_size()
-    visible_height = height - 6
+    width, _ = shutil.get_terminal_size()
 
     # Effective text width inside panel (minus padding and borders)
     inner_width = max(width - 4, 10)  # 2 borders + 2 padding (approx.)
@@ -133,12 +132,7 @@ def create_transcript_panel(transcript_lines: list[str], title: str = "RagOpsAge
         wrapped_parts = rich_text.wrap(console, inner_width)
         wrapped_lines.extend(wrapped_parts or [Text("")])
 
-    # Height
-    if len(wrapped_lines) < visible_height:
-        wrapped_lines = [Text("")] * (visible_height - len(wrapped_lines)) + wrapped_lines
-    else:
-        wrapped_lines = wrapped_lines[-visible_height:]
-
+    # Show ALL lines - no height restriction, terminal will handle scrolling
     # Combine lines into panel content
     content = Text()
     for i, part in enumerate(wrapped_lines):

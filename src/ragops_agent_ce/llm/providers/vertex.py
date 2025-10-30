@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from collections.abc import Iterator
 
 # Google Gen AI SDK
 from google import genai
@@ -348,3 +349,132 @@ class VertexProvider(LLMProvider):
 
     def supports_tools(self) -> bool:
         return True
+
+    def supports_streaming(self) -> bool:
+        return True
+
+    def generate_stream(
+        self,
+        messages: list[Message],
+        *,
+        model: str | None = None,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        max_tokens: int | None = None,
+    ) -> Iterator[LLMResponse]:
+        """Stream generation yielding partial responses."""
+
+        def _safe_text(text: str) -> str:
+            try:
+                return text.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
+            except Exception:
+                return ""
+
+        contents: list[types.Content] = []
+        system_instruction = ""
+
+        # Convert messages to genai format (same logic as generate())
+        i = 0
+        while i < len(messages):
+            m = messages[i]
+
+            if m.role == "tool":
+                # Collect all consecutive tool messages
+                tool_parts = []
+                while i < len(messages) and messages[i].role == "tool":
+                    tool_msg = messages[i]
+                    part = types.Part.from_function_response(
+                        name=tool_msg.name or "",
+                        response={"result": _safe_text(tool_msg.content or "")},
+                    )
+                    tool_parts.append(part)
+                    i += 1
+                if tool_parts:
+                    contents.append(types.Content(role="tool", parts=tool_parts))
+                continue
+            elif m.role == "system":
+                system_instruction += _safe_text(m.content).strip()
+                i += 1
+            elif m.role == "assistant":
+                if m.tool_calls:
+                    parts_list = []
+                    for tc in m.tool_calls:
+                        if not tc.function.name:
+                            logger.warning("Skipping tool call without name in history")
+                            continue
+                        args = (
+                            tc.function.arguments if isinstance(tc.function.arguments, dict) else {}
+                        )
+                        part = types.Part.from_function_call(name=tc.function.name, args=args)
+                        parts_list.append(part)
+                    if parts_list:
+                        contents.append(types.Content(role="assistant", parts=parts_list))
+                elif m.content:
+                    part = types.Part(text=_safe_text(m.content))
+                    contents.append(types.Content(role="assistant", parts=[part]))
+                i += 1
+            else:
+                part = types.Part(text=_safe_text(m.content))
+                contents.append(types.Content(role=m.role, parts=[part]))
+                i += 1
+
+        config = types.GenerateContentConfig(
+            temperature=temperature if temperature is not None else 0.2,
+            top_p=top_p if top_p is not None else 0.95,
+            max_output_tokens=max_tokens if max_tokens is not None else 8192,
+            system_instruction=system_instruction if system_instruction else None,
+        )
+
+        if tools:
+            function_declarations: list[types.FunctionDeclaration] = []
+            for t in tools:
+                schema_obj = self._clean_json_schema(t.function.parameters or {})
+                function_declarations.append(
+                    types.FunctionDeclaration(
+                        name=t.function.name,
+                        description=t.function.description or "",
+                        parameters=schema_obj,
+                    )
+                )
+            gen_tools = [types.Tool(function_declarations=function_declarations)]
+            config.tools = gen_tools
+
+        model_name = model or self._model_name
+
+        try:
+            # Use generate_content_stream for streaming
+            stream = self._client.models.generate_content_stream(
+                model=model_name,
+                contents=contents,
+                config=config,
+            )
+
+            # Accumulate full response for tool calls
+            accumulated_text = ""
+            accumulated_tool_calls: list[ToolCall] = []
+
+            for chunk in stream:
+                text, tool_calls = self._parse_response(chunk)
+
+                # Accumulate text
+                if text:
+                    accumulated_text += text
+                    # Yield partial text response
+                    yield LLMResponse(content=text, tool_calls=None, raw=chunk.model_dump())
+
+                # Accumulate tool calls (they come in full in final chunk)
+                if tool_calls:
+                    accumulated_tool_calls.extend(tool_calls)
+
+            # If we got tool calls, yield final response with them
+            if accumulated_tool_calls:
+                yield LLMResponse(
+                    content=accumulated_text if accumulated_text else None,
+                    tool_calls=accumulated_tool_calls,
+                    raw=None,
+                )
+
+        except Exception as e:
+            logger.error(f"Error streaming content: {e}")
+            yield LLMResponse(content="")
