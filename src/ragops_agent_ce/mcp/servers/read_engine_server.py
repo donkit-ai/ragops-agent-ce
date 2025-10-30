@@ -176,44 +176,55 @@ async def process_documents(args: ProcessDocumentsArgs) -> mcp.types.TextContent
     processed_files: list[str] = []
     failed_files: list[dict[str, str]] = []
 
-    # Process each file
+    # Process each file - DonkitReader will save directly to project directory
     for file_path in files_to_process:
         try:
+            logger.info(f"Processing file: {file_path}")
+            # Pass output_dir to save directly to project directory (no moving needed)
             output_path = reader.read_document(
                 str(file_path),
                 output_type=args.output_type,  # type: ignore
+                output_dir=str(project_output_dir),
             )
-            # Move processed file to project directory
-            processed_file = Path(output_path)
-            final_output_path = project_output_dir / processed_file.name
-            processed_file.rename(final_output_path)
-            processed_files.append(str(final_output_path))
-            logger.info(f"✓ Processed: {file_path.name} -> {final_output_path}")
+            logger.debug(f"DonkitReader saved to: {output_path}")
+            processed_files.append(output_path)
+            logger.info(f"✓ Processed: {file_path.name} -> {output_path}")
         except Exception as e:
             error_msg = str(e)
             failed_files.append({"file": str(file_path), "error": error_msg})
-            logger.error(f"✗ Failed to process {file_path.name}: {error_msg}")
+            logger.error(f"✗ Failed to process {file_path.name}: {error_msg}", exc_info=True)
 
-    # Clean up empty temp directories
+    # Clean up empty temp directories (safe for Windows)
     for file_path in files_to_process:
         temp_dir = file_path.parent / "processed"
-        if temp_dir.exists() and not list(temp_dir.iterdir()):
-            temp_dir.rmdir()
-            logger.info(f"Cleaned up empty temp directory: {temp_dir}")
+        try:
+            if temp_dir.exists() and temp_dir.is_dir() and not list(temp_dir.iterdir()):
+                temp_dir.rmdir()
+                logger.info(f"Cleaned up empty temp directory: {temp_dir}")
+        except Exception as e:
+            logger.warning(f"Could not clean up temp directory {temp_dir}: {e}")
 
     output_dir = str(project_output_dir)
 
+    # Determine status based on results
+    if processed_files and not failed_files:
+        status = "success"
+    elif processed_files and failed_files:
+        status = "partial_success"
+    else:
+        status = "error"
+
     result = {
-        "status": "success" if processed_files else "partial_failure",
+        "status": status,
         "output_directory": output_dir,
         "processed_count": len(processed_files),
         "failed_count": len(failed_files),
         "processed_files": processed_files[:10],  # Limit to first 10 for readability
         "failed_files": failed_files[:10] if failed_files else [],
         "message": (
-            f"Processed {len(processed_files)} files. "
-            f"Failed: {len(failed_files)}. "
-            f"Output saved to: {output_dir}"
+            f"Processed {len(processed_files)} files successfully. "
+            + (f"Failed: {len(failed_files)} files. " if failed_files else "")
+            + f"Output saved to: {output_dir}"
         ),
     }
 
