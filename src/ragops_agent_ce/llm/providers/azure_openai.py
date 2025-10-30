@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from typing import Any
 
 from openai import AzureOpenAI
@@ -31,6 +32,9 @@ class AzureOpenAIProvider(LLMProvider):
         self._deployment = self.settings.azure_openai_deployment
 
     def supports_tools(self) -> bool:
+        return True
+
+    def supports_streaming(self) -> bool:
         return True
 
     def _serialize_message(self, message: Message) -> dict[str, Any]:
@@ -99,3 +103,86 @@ class AzureOpenAIProvider(LLMProvider):
                 )
 
         return LLMResponse(content=content, tool_calls=tool_calls, raw=response.model_dump())
+
+    def generate_stream(
+        self,
+        messages: list[Message],
+        *,
+        model: str | None = None,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        max_tokens: int | None = None,
+    ) -> Iterator[LLMResponse]:
+        """Stream generation yielding partial responses."""
+        # Use deployment from settings or override with model parameter
+        deployment = model or self._deployment
+
+        kwargs: dict[str, Any] = {
+            "model": deployment,
+            "messages": [self._serialize_message(m) for m in messages],
+            "stream": True,
+        }
+
+        if tools:
+            kwargs["tools"] = [t.model_dump(exclude_none=True) for t in tools]
+            kwargs["tool_choice"] = "auto"
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+        if top_p is not None:
+            kwargs["top_p"] = top_p
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+
+        # Make streaming API call
+        stream = self._client.chat.completions.create(**kwargs)
+
+        # Accumulate tool calls across chunks
+        accumulated_tool_calls: dict[int, dict] = {}
+
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+
+            delta = chunk.choices[0].delta
+
+            # Yield text content if present
+            if delta.content:
+                yield LLMResponse(content=delta.content, tool_calls=None)
+
+            # Accumulate tool calls
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in accumulated_tool_calls:
+                        accumulated_tool_calls[idx] = {
+                            "id": tc_delta.id or "",
+                            "function": {"name": "", "arguments": ""},
+                        }
+
+                    if tc_delta.id:
+                        accumulated_tool_calls[idx]["id"] = tc_delta.id
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            accumulated_tool_calls[idx]["function"]["name"] = tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            accumulated_tool_calls[idx]["function"]["arguments"] += (
+                                tc_delta.function.arguments
+                            )
+
+        # Yield final response with accumulated tool calls if any
+        if accumulated_tool_calls:
+            tool_calls = []
+            for tc_data in accumulated_tool_calls.values():
+                args_str = tc_data["function"]["arguments"]
+                args = json.loads(args_str) if args_str else {}
+                tool_calls.append(
+                    ToolCall(
+                        id=tc_data["id"],
+                        function=ToolFunctionCall(
+                            name=tc_data["function"]["name"],
+                            arguments=args,
+                        ),
+                    )
+                )
+            yield LLMResponse(content=None, tool_calls=tool_calls)

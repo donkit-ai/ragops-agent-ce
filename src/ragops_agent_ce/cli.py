@@ -234,6 +234,47 @@ def _render_markdown_to_rich(text: str) -> str:
     return result
 
 
+def _create_tool_call_handler(transcript: list[str], current_response_index: list[int | None]):
+    """Create a tool call handler that adds messages to transcript inline with agent response."""
+
+    def _display_tool_call(
+        tool_name: str, args: dict, status: str, result=None, error=None
+    ) -> None:
+        """Display tool execution in a nice format and add to transcript inline."""
+        if status == "executing":
+            # Format args nicely for console only (not saved to transcript)
+            args_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in args.items())
+            msg = f"  [dim]🔧 Executing tool:[/dim] [yellow]{tool_name}[/yellow]({args_str})"
+            console.print(msg)
+        elif status == "success":
+            # Add completed message inline after current response
+            msg = f"  [dim]✓ Tool:[/dim] [green]{tool_name}[/green]"
+            console.print(msg)
+
+            # Insert into transcript right after the current agent response
+            if current_response_index[0] is not None:
+                insert_pos = current_response_index[0] + 1
+                transcript.insert(insert_pos, f"{_time_str()} {msg}")
+                # Update the index since we inserted a line
+                current_response_index[0] = insert_pos
+        elif status == "error":
+            msg = f"  [dim]✗ Tool failed:[/dim] [red]{tool_name}[/red] - {error}"
+            console.print(msg)
+            if current_response_index[0] is not None:
+                insert_pos = current_response_index[0] + 1
+                transcript.insert(insert_pos, f"{_time_str()} {msg}")
+                current_response_index[0] = insert_pos
+        elif status == "not_found":
+            msg = f"  [dim]? Tool not found:[/dim] [red]{tool_name}[/red]"
+            console.print(msg)
+            if current_response_index[0] is not None:
+                insert_pos = current_response_index[0] + 1
+                transcript.insert(insert_pos, f"{_time_str()} {msg}")
+                current_response_index[0] = insert_pos
+
+    return _display_tool_call
+
+
 def _start_repl(
     *,
     system: str | None,
@@ -260,8 +301,6 @@ def _start_repl(
             cmd_parts = shlex.split(cmd_str)
             logger.debug(f"Starting MCP client: {cmd_parts}")
             mcp_clients.append(MCPClient(cmd_parts[0], cmd_parts[1:]))
-
-    agent = LLMAgent(prov, tools=tools, mcp_clients=mcp_clients)
 
     session_started_at = time.time()
 
@@ -290,6 +329,16 @@ def _start_repl(
         return get_active_checklist_text(session_started_at)
 
     transcript: list[str] = []
+    # Track current response position for inline tool call insertion
+    current_response_index: list[int | None] = [None]
+
+    # Create agent with tool call handler that adds to transcript inline
+    agent = LLMAgent(
+        prov,
+        tools=tools,
+        mcp_clients=mcp_clients,
+        tool_call_callback=_create_tool_call_handler(transcript, current_response_index),
+    )
     renderer.render_startup_screen()
 
     transcript.append(
@@ -364,13 +413,67 @@ def _start_repl(
 
         try:
             history.append(Message(role="user", content=user_input))
-            reply = agent.respond(history, model=model)
-            history.append(Message(role="assistant", content=reply))
 
-            # Render markdown reply
-            rendered_reply = _render_markdown_to_rich(reply)
-            transcript.append(
-                f"{_time_str()} [bold green]RagOps Agent>[/bold green] {rendered_reply}"
-            )
+            # Use streaming if provider supports it
+            if prov.supports_streaming():
+                reply = ""
+                interrupted = False
+
+                # Add placeholder to transcript and set index BEFORE generation starts
+                # This ensures tool calls are inserted in the right place
+                transcript.append(f"{_time_str()} [bold green]RagOps Agent>[/bold green] ")
+                current_response_index[0] = len(transcript) - 1
+
+                # Print prefix without re-rendering entire screen
+                console.print(
+                    f"{_time_str()} [bold green]RagOps Agent>[/bold green] ",
+                    end="",
+                )
+
+                try:
+                    # Stream chunks directly to console without screen re-renders
+                    for chunk in agent.respond_stream(history, model=model):
+                        reply += chunk
+                        # Print chunk directly - no screen clearing/merging
+                        console.print(chunk, end="", markup=False)
+                except KeyboardInterrupt:
+                    interrupted = True
+                    console.print("\n[yellow]⚠ Generation interrupted by user[/yellow]")
+
+                # Print newline after streaming completes (if not interrupted)
+                if not interrupted:
+                    console.print()
+
+                # Replace placeholder with actual response
+                if reply:  # Only add if we got some response
+                    rendered_reply = _render_markdown_to_rich(reply)
+                    transcript[current_response_index[0]] = (
+                        f"{_time_str()} [bold green]RagOps Agent>[/bold green] {rendered_reply}"
+                    )
+                    history.append(Message(role="assistant", content=reply))
+                elif interrupted:
+                    transcript[current_response_index[0]] = (
+                        f"{_time_str()} [yellow]Generation interrupted[/yellow]"
+                    )
+            else:
+                # Fall back to non-streaming mode
+                # Add placeholder and set index BEFORE generation
+                transcript.append(f"{_time_str()} [bold green]RagOps Agent>[/bold green] ")
+                current_response_index[0] = len(transcript) - 1
+
+                try:
+                    reply = agent.respond(history, model=model)
+                    history.append(Message(role="assistant", content=reply))
+
+                    # Replace placeholder with actual response
+                    rendered_reply = _render_markdown_to_rich(reply)
+                    transcript[current_response_index[0]] = (
+                        f"{_time_str()} [bold green]RagOps Agent>[/bold green] {rendered_reply}"
+                    )
+                except KeyboardInterrupt:
+                    console.print("\n[yellow]⚠ Generation interrupted by user[/yellow]")
+                    transcript[current_response_index[0]] = (
+                        f"{_time_str()} [yellow]Generation interrupted[/yellow]"
+                    )
         except Exception as e:
             transcript.append(f"{_time_str()} [bold red]Error:[/bold red] {str(e)}")

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Iterator
 
 from loguru import logger
 
 from ..llm.base import LLMProvider
-from ..llm.types import Message, ToolSpec
+from ..llm.types import LLMResponse, Message, ToolSpec
 from ..mcp.client import MCPClient
 from .project_tools import (
     tool_add_loaded_files,
@@ -44,11 +45,13 @@ class LLMAgent:
         tools: list[AgentTool] | None = None,
         mcp_clients: list[MCPClient] | None = None,
         max_iterations: int = 30,
+        tool_call_callback: Callable[..., None] | None = None,
     ) -> None:
         self.provider = provider
         self.local_tools = tools or default_tools()
         self.mcp_clients = mcp_clients or []
         self.mcp_tools: dict[str, tuple[dict, MCPClient]] = {}
+        self.tool_call_callback = tool_call_callback  # Optional callback for tool execution display
 
         for client in self.mcp_clients:
             try:
@@ -119,10 +122,16 @@ class LLMAgent:
 
         Raises on execution error, matching previous behavior.
         """
+        # Notify callback about tool execution start
+        if self.tool_call_callback:
+            self.tool_call_callback(tc.function.name, args, status="executing")
+
         try:
             local_tool, mcp_tool_info = self._find_tool(tc.function.name)
             if not local_tool and not mcp_tool_info:
                 logger.warning(f"Tool not found: {tc.function.name}")
+                if self.tool_call_callback:
+                    self.tool_call_callback(tc.function.name, args, status="not_found")
                 return ""
 
             if local_tool:
@@ -135,9 +144,19 @@ class LLMAgent:
             else:
                 result = f"Error: Tool '{tc.function.name}' not found or MCP client not configured."
                 logger.error(result)
+
+            # Notify callback about success
+            if self.tool_call_callback:
+                self.tool_call_callback(tc.function.name, args, status="success", result=result)
+
         except Exception as e:
             result = f"MALFORMED_FUNCTION_CALL: Error executing tool '{tc.function.name}': {e}"
             logger.error(f"Tool execution error: {e}", exc_info=True)
+
+            # Notify callback about error
+            if self.tool_call_callback:
+                self.tool_call_callback(tc.function.name, args, status="error", error=str(e))
+
         return self._serialize_tool_result(result)
 
     def _serialize_tool_result(self, result) -> str:
@@ -175,6 +194,16 @@ class LLMAgent:
         messages.append(Message(role="user", content=prompt))
         return self.respond(messages, model=model)
 
+    def chat_stream(
+        self, *, prompt: str, system: str | None = None, model: str | None = None
+    ) -> Iterator[str]:
+        """Chat with streaming output. Yields text chunks."""
+        messages: list[Message] = []
+        if system:
+            messages.append(Message(role="system", content=system))
+        messages.append(Message(role="user", content=prompt))
+        yield from self.respond_stream(messages, model=model)
+
     def respond(self, messages: list[Message], *, model: str | None = None) -> str:
         """Perform a single assistant turn given an existing message history.
 
@@ -199,3 +228,55 @@ class LLMAgent:
             return resp.content
 
         return ""
+
+    def respond_stream(self, messages: list[Message], *, model: str | None = None) -> Iterator[str]:
+        """Perform a single assistant turn with streaming output.
+
+        This method mutates the provided messages list by appending tool results as needed.
+        Yields text chunks as they arrive from the LLM.
+
+        Returns:
+            Iterator that yields text chunks.
+            The caller should accumulate them for the full response.
+        """
+        if not self.provider.supports_streaming():
+            logger.warning(
+                f"{self.provider.name} provider does not support streaming, "
+                "falling back to regular respond()"
+            )
+            # Yield the full response as a single chunk
+            yield self.respond(messages, model=model)
+            return
+
+        tools = self._tool_specs() if self.provider.supports_tools() else None
+
+        for _ in range(self.max_iterations):
+            # Use streaming generation
+            accumulated_text = ""
+            accumulated_tool_calls = None
+
+            for chunk in self.provider.generate_stream(messages, tools=tools, model=model):
+                # Yield text chunks as they arrive
+                if chunk.content:
+                    accumulated_text += chunk.content
+                    yield chunk.content
+
+                # Check for tool calls in final chunk
+                if chunk.tool_calls:
+                    accumulated_tool_calls = chunk.tool_calls
+
+            # Handle tool calls if present
+            if accumulated_tool_calls and self.provider.supports_tools():
+                # Create a synthetic response for tool handling
+                resp = LLMResponse(
+                    content=accumulated_text or None, tool_calls=accumulated_tool_calls
+                )
+                self._handle_tool_calls(messages, resp.tool_calls)
+                # Continue loop to give tool results back to the model
+                continue
+
+            # Done - all chunks have been yielded
+            return
+
+        # Max iterations reached
+        return

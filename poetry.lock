@@ -1445,15 +1445,15 @@ openai = ">=2.1.0,<3.0.0"
 
 [[package]]
 name = "donkit-read-engine"
-version = "0.1.4"
+version = "0.1.7"
 description = "Document loading helpers for Donkit RagOps"
 optional = false
 python-versions = "<4.0,>=3.12"
 groups = ["main"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
-    {file = "donkit_read_engine-0.1.4-py3-none-any.whl", hash = "sha256:dadada0e38bd94611f7733ef753107c19649691980d9409a84575470a481055a"},
-    {file = "donkit_read_engine-0.1.4.tar.gz", hash = "sha256:c1ccaec7be3fa89378482dba4beaac164f1dfc7c78335494cc8bdfd2d91970df"},
+    {file = "donkit_read_engine-0.1.7-py3-none-any.whl", hash = "sha256:3b9cdb9e0b7d3282135afe2ad9deb4abeccd59235668d8be4d6dac0ad9744ff8"},
+    {file = "donkit_read_engine-0.1.7.tar.gz", hash = "sha256:886f666d43d3008608fad3f3eac537dceff314d8c1d6e7fd1f899961e575a8d5"},
 ]
 
 [package.dependencies]
@@ -9395,4 +9395,4 @@ cffi = ["cffi (>=1.17,<2.0)", "cffi (>=2.0.0b)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "70ec02f729afce3876dbc12f7825560d2bbe7602409f151ced00ff0cb8e5cd8a"
+content-hash = "7b52de8f7e559cc896c424638d9b5ddd0243efea2e8244c54fcd21c211cc7987"
