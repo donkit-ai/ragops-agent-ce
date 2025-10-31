@@ -180,15 +180,35 @@ donkit-ragops-ce ping
 
 ### Environment Variables
 
-- `RAGOPS_LLM_PROVIDER` — LLM provider name (e.g., `openai` for OpenAI models)
-- `RAGOPS_LLM_MODEL` — Specify model name (e.g., `gpt-4o-mini` for OpenAI)
+#### LLM Provider Configuration
+- `RAGOPS_LLM_PROVIDER` — LLM provider name (e.g., `openai`, `vertex`, `azure_openai`, `ollama`, `openrouter`)
+- `RAGOPS_LLM_MODEL` — Specify model name (e.g., `gpt-4o-mini` for OpenAI, `gemini-2.5-flash` for Vertex)
+
+#### OpenAI / OpenRouter / Ollama
+- `RAGOPS_OPENAI_API_KEY` — OpenAI API key (also used for OpenRouter and Ollama)
+- `RAGOPS_OPENAI_BASE_URL` — OpenAI base URL (default: https://api.openai.com/v1)
+  - OpenRouter: `https://openrouter.ai/api/v1`
+  - Ollama: `http://localhost:11434/v1`
+- `RAGOPS_OPENAI_EMBEDDINGS_MODEL` — Embedding model name (default: text-embedding-3-small)
+
+#### Azure OpenAI
+- `RAGOPS_AZURE_OPENAI_API_KEY` — Azure OpenAI API key
+- `RAGOPS_AZURE_OPENAI_ENDPOINT` — Azure OpenAI endpoint URL
+- `RAGOPS_AZURE_OPENAI_API_VERSION` — Azure API version (default: 2025-03-01-preview)
+- `RAGOPS_AZURE_OPENAI_DEPLOYMENT` — Azure deployment name for chat model
+- `RAGOPS_AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT` — Azure deployment name for embeddings model
+
+#### Vertex AI (Google Cloud)
+- `RAGOPS_VERTEX_CREDENTIALS` — Path to Vertex AI service account JSON
+- `RAGOPS_VERTEX_PROJECT` — Google Cloud project ID (optional, extracted from credentials if not set)
+- `RAGOPS_VERTEX_LOCATION` — Vertex AI location (default: us-central1)
+
+#### Anthropic
+- `RAGOPS_ANTHROPIC_API_KEY` — Anthropic API key
+
+#### Logging
 - `RAGOPS_LOG_LEVEL` — Logging level (default: INFO)
 - `RAGOPS_MCP_COMMANDS` — Comma-separated list of MCP commands
-- `RAGOPS_VERTEX_CREDENTIALS` — Path to Vertex AI service account JSON
-- `RAGOPS_OPENAI_API_KEY` — OpenAI API key
-- `RAGOPS_OPENAI_BASE_URL` — OpenAI base URL (default: https://api.openai.com/v1)
-- `RAGOPS_ANTHROPIC_API_KEY` — Anthropic API key
-- `RAGOPS_OLLAMA_BASE_URL` — Ollama server URL
 
 ## Agent Workflow
 

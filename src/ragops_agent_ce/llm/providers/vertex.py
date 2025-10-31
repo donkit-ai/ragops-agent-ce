@@ -273,7 +273,6 @@ class VertexProvider(LLMProvider):
     @staticmethod
     def _parse_response(response) -> tuple[str | None, list[ToolCall] | None]:
         """Parse a genai response (or stream chunk) into plain text and tool calls."""
-        text = ""
         calls: list[ToolCall] = []
 
         try:
@@ -298,54 +297,50 @@ class VertexProvider(LLMProvider):
         except AttributeError:
             parts = []
 
-        # Collect text directly
+        # Collect text and tool calls in a single pass
         collected_text: list[str] = []
         for p in parts:
+            # Try to get text from this part
             try:
                 t = p.text
+                if t:
+                    collected_text.append(t)
             except AttributeError:
-                t = ""
-            if t:
-                collected_text.append(t)
-        text = "".join(collected_text)
+                pass
 
-        # Collect tool calls directly
-        for p in parts:
+            # Try to get function_call from this part
             try:
                 fc = p.function_call
-            except AttributeError:
-                fc = None
-            if not fc:
-                continue
-            args = {}
-            try:
-                if fc.args:
-                    args = dict(fc.args) if isinstance(fc.args, dict) else dict(fc.args)
-            except AttributeError:
-                args = {}
-            try:
-                name = fc.name
-            except AttributeError:
-                name = ""
+                if fc:
+                    # Extract function name and arguments
+                    try:
+                        name = fc.name
+                    except AttributeError:
+                        name = ""
 
-            # Skip tool calls without a valid name
-            if not name:
-                logger.warning(f"Skipping function call without name: {fc}")
-                continue
+                    if not name:
+                        logger.warning(f"Skipping function call without name: {fc}")
+                        continue
 
-            calls.append(
-                ToolCall(
-                    id=name,
-                    function=ToolFunctionCall(
-                        name=name,
-                        arguments=args,
-                    ),
-                )
-            )
+                    try:
+                        args = dict(fc.args) if fc.args else {}
+                    except (AttributeError, TypeError):
+                        args = {}
 
-        # Return None for text if empty and there are tool calls
-        final_text = text if text else None
-        return final_text, (calls or None)
+                    calls.append(
+                        ToolCall(
+                            id=name,
+                            function=ToolFunctionCall(
+                                name=name,
+                                arguments=args,
+                            ),
+                        )
+                    )
+            except AttributeError:
+                pass
+
+        text = "".join(collected_text)
+        return text or None, calls or None
 
     def supports_tools(self) -> bool:
         return True
@@ -450,30 +445,21 @@ class VertexProvider(LLMProvider):
                 config=config,
             )
 
-            # Accumulate full response for tool calls
-            accumulated_text = ""
-            accumulated_tool_calls: list[ToolCall] = []
-
             for chunk in stream:
+                logger.debug(chunk)
                 text, tool_calls = self._parse_response(chunk)
 
-                # Accumulate text
+                # Yield text chunks as they come
                 if text:
-                    accumulated_text += text
-                    # Yield partial text response
                     yield LLMResponse(content=text, tool_calls=None, raw=chunk.model_dump())
 
-                # Accumulate tool calls (they come in full in final chunk)
+                # Tool calls come in final chunk - yield them separately
                 if tool_calls:
-                    accumulated_tool_calls.extend(tool_calls)
-
-            # If we got tool calls, yield final response with them
-            if accumulated_tool_calls:
-                yield LLMResponse(
-                    content=accumulated_text if accumulated_text else None,
-                    tool_calls=accumulated_tool_calls,
-                    raw=None,
-                )
+                    yield LLMResponse(
+                        content=None,
+                        tool_calls=tool_calls,
+                        raw=chunk.model_dump(),
+                    )
 
         except Exception as e:
             logger.error(f"Error streaming content: {e}")

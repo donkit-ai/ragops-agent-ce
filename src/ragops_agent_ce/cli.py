@@ -241,7 +241,65 @@ def _start_repl(
     if system:
         history.append(Message(role="system", content=system))
 
+    # Transcript buffer must be available for helper functions below
+    transcript: list[str] = []
+
     renderer = ScreenRenderer()
+
+    # Helpers for rendering and transcript updates
+    def _render_current_screen(show_input_space: bool) -> None:
+        cl_text = _get_session_checklist()
+        if cl_text:
+            renderer.render_conversation_and_checklist(
+                transcript, cl_text, show_input_space=show_input_space
+            )
+        else:
+            renderer.render_conversation_screen(transcript, show_input_space=show_input_space)
+
+    def _append_user_line(text: str) -> None:
+        transcript.append(f"\n\n{_time_str()} [bold blue]you>[/bold blue] {escape(text)}")
+
+    def _start_agent_placeholder() -> int:
+        transcript.append(f"\n{_time_str()} [bold green]RagOps Agent>[/bold green] ")
+        return len(transcript) - 1
+
+    def _set_agent_line(index: int, display_content: str, temp_executing: str) -> None:
+        transcript[index] = (
+            f"\n{_time_str()} [bold green]RagOps Agent>[/bold green] {display_content}{temp_executing}"  # noqa
+        )
+
+    # Formatting helpers for tool execution messages
+    def _tool_executing_message(tool_name: str, tool_args: dict | None) -> str:
+        args_str = ", ".join(tool_args.keys()) if tool_args else ""
+        return f"\n[dim]🔧 Executing tool:[/dim] [yellow]{escape(tool_name)}[/yellow]({args_str})"
+
+    def _tool_done_message(tool_name: str) -> str:
+        return f"\n[dim]✓ Tool:[/dim] [green]{escape(tool_name)}[/green]\n"
+
+    def _tool_error_message(tool_name: str, error: str) -> str:
+        return f"\n[dim]✗ Tool failed:[/dim] [red]{escape(tool_name)}[/red] - {escape(error)}\n"
+
+    # Stream event handler: returns updated (reply, display_content, temp_executing)
+    def _process_stream_event(
+        event, reply: str, display_content: str, temp_executing: str
+    ) -> tuple[str, str, str]:
+        et = getattr(event, "type", None)
+        if et == "content":
+            content_chunk = event.content or ""
+            reply = reply + content_chunk
+            display_content = display_content + content_chunk
+            return reply, display_content, temp_executing
+        if et == "tool_call_start":
+            return reply, display_content, _tool_executing_message(event.tool_name, event.tool_args)
+        if et == "tool_call_end":
+            return reply, display_content + _tool_done_message(event.tool_name), ""
+        if et == "tool_call_error":
+            return (
+                reply,
+                display_content + _tool_error_message(event.tool_name, event.error or ""),
+                "",
+            )
+        return reply, display_content, temp_executing
 
     # Sanitize transcript from any legacy checklist lines (we now render checklist separately)
     def _sanitize_transcript(trans: list[str]) -> None:
@@ -260,8 +318,6 @@ def _start_repl(
 
     def _get_session_checklist() -> str | None:
         return get_active_checklist_text(session_started_at)
-
-    transcript: list[str] = []
 
     # Create agent
     agent = LLMAgent(
@@ -296,13 +352,7 @@ def _start_repl(
 
     while True:
         try:
-            cl_text = _get_session_checklist()
-            if cl_text:
-                renderer.render_conversation_and_checklist(
-                    transcript, cl_text, show_input_space=True
-                )
-            else:
-                renderer.render_conversation_screen(transcript, show_input_space=True)
+            _render_current_screen(show_input_space=True)
             user_input = get_user_input()
         except (EOFError, KeyboardInterrupt):
             transcript.append("[Exiting REPL]")
@@ -333,13 +383,9 @@ def _start_repl(
             renderer.render_goodbye_screen()
             break
 
-        transcript.append(f"{_time_str()} [bold blue]you>[/bold blue] {escape(user_input)}")
+        _append_user_line(user_input)
         _sanitize_transcript(transcript)
-        cl_text = _get_session_checklist()
-        if cl_text:
-            renderer.render_conversation_and_checklist(transcript, cl_text)
-        else:
-            renderer.render_conversation_screen(transcript)
+        _render_current_screen(show_input_space=False)
 
         try:
             history.append(Message(role="user", content=user_input))
@@ -349,8 +395,7 @@ def _start_repl(
                 interrupted = False
 
                 # Add placeholder to transcript
-                transcript.append(f"{_time_str()} [bold green]RagOps Agent>[/bold green] ")
-                response_index = len(transcript) - 1
+                response_index = _start_agent_placeholder()
 
                 try:
                     # Accumulate everything in display order
@@ -360,48 +405,15 @@ def _start_repl(
 
                     # Stream events - process content and tool calls
                     for event in agent.respond_stream(history, model=model):
-                        if event.type == "content":
-                            # Accumulate content for history
-                            reply += event.content or ""
-                            # Add content to display only if not already there
-                            content_chunk = event.content or ""
-                            if content_chunk and content_chunk not in display_content:
-                                display_content += content_chunk
-                        elif event.type == "tool_call_start":
-                            # Show temporary executing message (not added to display_content)
-                            args_str = ", ".join(event.tool_args.keys()) if event.tool_args else ""
-                            temp_executing = (
-                                f"\n\n[dim]🔧 Executing tool:[/dim] "
-                                f"[yellow]{event.tool_name}[/yellow]({args_str})"
-                            )
-                        elif event.type == "tool_call_end":
-                            # Clear temp message and add success to permanent content
-                            temp_executing = ""
-                            msg = f"\n[dim]✓ Tool:[/dim] [green]{event.tool_name}[/green]\n"
-                            display_content += msg
-                        elif event.type == "tool_call_error":
-                            # Clear temp message and add error to permanent content
-                            temp_executing = ""
-                            msg = (
-                                f"\n[dim]✗ Tool failed:[/dim] "
-                                f"\[red]{event.tool_name}[/red] - {event.error}\n"
-                            )
-                            display_content += msg
-
-                        # Update transcript with permanent content + temporary executing message
-                        transcript[response_index] = (
-                            f"{_time_str()} [bold green]RagOps Agent>[/bold green] "
-                            f"{display_content}{temp_executing}"
+                        reply, display_content, temp_executing = _process_stream_event(
+                            event, reply, display_content, temp_executing
                         )
 
+                        # Update transcript with permanent content + temporary executing message
+                        _set_agent_line(response_index, display_content, temp_executing)
+
                         # Re-render screen after each event
-                        cl_text = _get_session_checklist()
-                        if cl_text:
-                            renderer.render_conversation_and_checklist(
-                                transcript, cl_text, show_input_space=False
-                            )
-                        else:
-                            renderer.render_conversation_screen(transcript, show_input_space=False)
+                        _render_current_screen(show_input_space=False)
                 except KeyboardInterrupt:
                     interrupted = True
                     transcript[response_index] = (
@@ -414,8 +426,7 @@ def _start_repl(
             else:
                 # Fall back to non-streaming mode
                 # Add placeholder
-                transcript.append(f"{_time_str()} [bold green]RagOps Agent>[/bold green] ")
-                response_index = len(transcript) - 1
+                response_index = _start_agent_placeholder()
 
                 try:
                     reply = agent.respond(history, model=model)
@@ -423,9 +434,7 @@ def _start_repl(
 
                     # Replace placeholder with actual response
                     rendered_reply = _render_markdown_to_rich(reply)
-                    transcript[response_index] = (
-                        f"{_time_str()} [bold green]RagOps Agent>[/bold green] {rendered_reply}"
-                    )
+                    _set_agent_line(response_index, rendered_reply, "")
                 except KeyboardInterrupt:
                     console.print("\n[yellow]⚠ Generation interrupted by user[/yellow]")
                     transcript[response_index] = (
