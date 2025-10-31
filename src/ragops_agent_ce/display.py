@@ -172,12 +172,13 @@ def create_transcript_panel(
 
 
 def create_status_panel(agent_settings: AgentSettings, title: str = "Agent settings") -> Panel:
-    status_lines = [f"LLM provider: {agent_settings.llm_provider.name}"]
+    status_lines = [f"LLM provider: [cyan]{agent_settings.llm_provider.name}[cyan]"]
     if agent_settings.model:
-        status_lines.append(f"Model: {agent_settings.model}")
+        status_lines.append(f"Model: [cyan]{agent_settings.model}[/cyan]")
     return Panel(
-        Text("\n".join(status_lines)),
+        Text.from_markup("\n".join(status_lines)),
         title=f"[bold blue]{title}[/bold blue]",
+        border_style="cyan",
     )
 
 

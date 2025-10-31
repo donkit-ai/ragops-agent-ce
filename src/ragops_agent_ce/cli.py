@@ -366,7 +366,8 @@ def _start_repl(
                 "  [bold]:help[/bold] - Show this help message",
                 "  [bold]:q[/bold] or [bold]:quit[/bold] - Exit the agent",
                 "  [bold]:clear[/bold] - Clear the conversation transcript",
-                "  [bold]:agent <llm_provider>/<model>[/bold] - Change agent LLM provider and model",
+                "  [bold]:agent [cyan]<llm_provider>/<model>[/cyan][/bold] - "
+                "Change agent LLM provider and model",
             ]
             continue
 
