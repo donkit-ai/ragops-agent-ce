@@ -11,10 +11,15 @@ from google.genai import types
 from google.oauth2 import service_account
 from loguru import logger
 
-from ...config import Settings, load_settings
+from ...config import Settings
+from ...config import load_settings
 from ...logging_config import setup_logging
 from ..base import LLMProvider
-from ..types import LLMResponse, Message, ToolCall, ToolFunctionCall, ToolSpec
+from ..types import LLMResponse
+from ..types import Message
+from ..types import ToolCall
+from ..types import ToolFunctionCall
+from ..types import ToolSpec
 
 
 class VertexProvider(LLMProvider):

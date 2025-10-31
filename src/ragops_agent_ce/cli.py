@@ -41,18 +41,25 @@ except ImportError:
     READLINE_AVAILABLE = False
 
 from . import __version__
-from .agent.agent import LLMAgent, default_tools
-from .agent.prompts import OPENAI_SYSTEM_PROMPT, VERTEX_SYSTEM_PROMPT
-from .checklist_manager import ChecklistWatcherWithRenderer, get_active_checklist_text
+from .agent.agent import LLMAgent
+from .agent.agent import default_tools
+from .agent.prompts import OPENAI_SYSTEM_PROMPT
+from .agent.prompts import VERTEX_SYSTEM_PROMPT
+from .checklist_manager import ChecklistWatcherWithRenderer
+from .checklist_manager import get_active_checklist_text
 from .config import load_settings
-from .db import close, kv_all_by_prefix, open_db
+from .db import close
+from .db import kv_all_by_prefix
+from .db import open_db
 from .display import ScreenRenderer
 from .interactive_input import get_user_input
-from .llm.provider_factory import PROVIDER_PATHS, get_provider
+from .llm.provider_factory import PROVIDER_PATHS
+from .llm.provider_factory import get_provider
 from .llm.types import Message
 from .logging_config import setup_logging
 from .mcp.client import MCPClient
-from .prints import RAGOPS_LOGO_ART, RAGOPS_LOGO_TEXT
+from .prints import RAGOPS_LOGO_ART
+from .prints import RAGOPS_LOGO_TEXT
 from .setup_wizard import run_setup_if_needed
 
 app = typer.Typer(

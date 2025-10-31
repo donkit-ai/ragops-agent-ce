@@ -4,7 +4,9 @@ import os
 import re
 
 import mcp
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel
+from pydantic import Field
+from pydantic import model_validator
 from ragops_agent_ce.schemas.config_schemas import RagConfig
 
 

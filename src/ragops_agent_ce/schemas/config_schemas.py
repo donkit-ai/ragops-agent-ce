@@ -15,10 +15,12 @@ Shared Models:
     - RagConfig: Unified RAG configuration (base schema)
 """
 
-from enum import StrEnum, auto
+from enum import StrEnum
+from enum import auto
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from pydantic import Field
 
 # ============================================================================
 # Enums
