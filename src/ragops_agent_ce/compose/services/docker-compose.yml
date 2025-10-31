@@ -3,7 +3,7 @@ version: '3.8'
 services:
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: qdrant
+    container_name: ${QDRANT_CONTAINER_NAME:-qdrant}
     profiles:
       - qdrant
       - full-stack
@@ -27,7 +27,7 @@ services:
 
   chroma:
     image: chromadb/chroma:latest
-    container_name: chroma
+    container_name: ${CHROMA_CONTAINER_NAME:-chroma}
     profiles:
       - chroma
     ports:
@@ -49,7 +49,7 @@ services:
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.5
-    container_name: milvus-etcd
+    container_name: ${MILVUS_ETCD_CONTAINER_NAME:-milvus-etcd}
     profiles:
       - milvus
     environment:
@@ -71,7 +71,7 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: milvus-minio
+    container_name: ${MILVUS_MINIO_CONTAINER_NAME:-milvus-minio}
     profiles:
       - milvus
     environment:
@@ -91,7 +91,7 @@ services:
 
   milvus:
     image: milvusdb/milvus:v2.3.21
-    container_name: milvus-standalone
+    container_name: ${MILVUS_STANDALONE_CONTAINER_NAME:-milvus-standalone}
     profiles:
       - milvus
     command: ["milvus", "run", "standalone"]
@@ -123,7 +123,7 @@ services:
   rag-service:
     image: donkitai/rag-service:latest
     pull_policy: always
-    container_name: ${PROJECT_ID:-default}
+    container_name: ${RAG_SERVICE_CONTAINER_NAME:-rag-service}
     profiles:
       - rag-service
       - full-stack
