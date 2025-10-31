@@ -1,8 +1,17 @@
-RAGOPS_LOGO_TEXT = """
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version
+
+try:
+    pkg_version = version("donkit-ragops-ce")
+except PackageNotFoundError:
+    pkg_version = None
+
+
+RAGOPS_LOGO_TEXT = f"""
    ████  █████ ████  ██ ██ ██ ████
    ██ ██ ██ ██ ██ ██ ████  ██  ██
    ████  █████ ██ ██ ██ ██ ██  ██
-    RAGOps Community Edition 0.2
+    RAGOps Community Edition {pkg_version if pkg_version else ""}
 """
 
 RAGOPS_LOGO_ART = """
