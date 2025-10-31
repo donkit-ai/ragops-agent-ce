@@ -25,9 +25,9 @@ class ProcessDocumentsArgs(BaseModel):
     project_id: str = Field(
         description="Project ID to store processed documents in projects/<project_id>/processed/"
     )
-    output_type: Literal["text", "json", "markdown"] = Field(
-        default="json",
-        description="Output format for processed documents",
+    output_type: Literal["json"] = Field(
+        default="json",  # TODO: add new types - .md, .txt
+        description="Output format for processed documents, always json",
     )
 
 

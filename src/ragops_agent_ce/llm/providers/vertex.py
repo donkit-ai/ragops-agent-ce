@@ -451,7 +451,6 @@ class VertexProvider(LLMProvider):
             )
 
             for chunk in stream:
-                logger.debug(chunk)
                 text, tool_calls = self._parse_response(chunk)
 
                 # Yield text chunks as they come
