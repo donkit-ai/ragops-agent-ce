@@ -11,7 +11,7 @@ RAGOPS_LOGO_TEXT = f"""
    ████  █████ ████  ██ ██ ██ ████
    ██ ██ ██ ██ ██ ██ ████  ██  ██
    ████  █████ ██ ██ ██ ██ ██  ██
-    RAGOps Community Edition {pkg_version if pkg_version else ""}
+   RAGOps Community Edition {pkg_version if pkg_version else ""}
 """
 
 RAGOPS_LOGO_ART = """
