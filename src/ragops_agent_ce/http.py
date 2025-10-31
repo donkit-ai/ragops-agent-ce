@@ -4,7 +4,8 @@ from typing import Any
 
 import httpx
 
-from .config import Settings, load_settings
+from .config import Settings
+from .config import load_settings
 
 
 class RagOpsClient:

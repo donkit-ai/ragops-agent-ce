@@ -3,7 +3,8 @@ from __future__ import annotations
 import importlib
 import json
 
-from ..config import Settings, load_settings
+from ..config import Settings
+from ..config import load_settings
 from .base import LLMProvider
 
 PROVIDER_PATHS: dict[str, tuple[str, str]] = {

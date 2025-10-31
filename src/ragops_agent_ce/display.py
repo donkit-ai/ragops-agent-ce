@@ -6,8 +6,9 @@ import sys
 
 from rich.align import Align
 from rich.console import Console
-from rich.layout import Layout
+from rich.console import Group
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
 
 from ragops_agent_ce.schemas.agent_schemas import AgentSettings
@@ -69,30 +70,24 @@ def render_project(
     width, height = shutil.get_terminal_size()
     height -= 3  # Reserve space for input prompt
     right_width = 50
-    layout = Layout(name="root")
-    layout.split_row(
-        Layout(
-            create_transcript_panel(
-                transcript_lines,
-                width=width - right_width,
-                height=height,
-            ),
-            name="left",
-        ),
-        Layout(name="right", size=right_width),
-    )
 
-    right = layout["right"]
-    right.split_column(
-        Layout(create_status_panel(agent_settings), name="top", size=4),
-        Layout(" ", name="bottom"),
-    )
-
+    right_panels = [create_status_panel(agent_settings)]
     if checklist_text:
         checklist_panel = create_checklist_panel(checklist_text)
-        right["bottom"].update(checklist_panel)
+        right_panels.append(checklist_panel)
 
-    console.print(layout, height=height)
+    table = Table(show_header=False, show_edge=False, padding=(0, 0), box=None, expand=True)
+    table.add_column(width=width - right_width)
+    table.add_column(width=right_width)
+    table.add_row(
+        create_transcript_panel(
+            transcript_lines,
+            width=width - right_width,
+        ),
+        Align(Group(*right_panels, fit=False), vertical="bottom"),
+    )
+
+    console.print(table)
 
 
 def clear_screen_aggressive() -> None:
@@ -128,7 +123,7 @@ def clear_screen_aggressive() -> None:
 def create_transcript_panel(
     transcript_lines: list[str],
     width: int,
-    height: int,
+    height: int | None = None,
     title: str = "Conversation",
 ) -> Panel:
     """
@@ -143,21 +138,21 @@ def create_transcript_panel(
     """
     lines = transcript_lines or ["[dim italic]No messages yet. Start by typing a message![/]"]
 
-    wrapped_lines: list[Text] = []
-    for line in lines:
-        rich_text = Text.from_markup(line)
-        wrapped_parts = rich_text.wrap(console, width - 2)
-        wrapped_lines.extend(wrapped_parts or [Text("")])
+    # wrapped_lines: list[Text] = []
+    # for line in lines:
+    #     rich_text = Text.from_markup(line)
+    #     wrapped_parts = rich_text.wrap(console, width - 2)
+    #     wrapped_lines.extend(wrapped_parts or [Text("")])
 
-    visible_parts = wrapped_lines[-(height - 4) :]
+    # visible_parts = wrapped_lines[-(height - 4) :]
 
     # Combine lines into panel content
-    clipped_text = Text()
-    for part in visible_parts:
-        clipped_text.append("\n")
-        clipped_text.append(part)
+    content = Text()
+    for line in lines:
+        content.append("\n")
+        content.append(Text.from_markup(line))
 
-    content = Align(clipped_text, align="left", vertical="bottom")
+    # content = Align(clipped_text, align="left", vertical="bottom")
 
     kwargs = {}
     if height is not None:

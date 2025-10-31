@@ -5,8 +5,10 @@ import os
 from pathlib import Path
 
 import mcp
-from donkit.chunker import ChunkerConfig, DonkitChunker
-from pydantic import BaseModel, Field
+from donkit.chunker import ChunkerConfig
+from donkit.chunker import DonkitChunker
+from pydantic import BaseModel
+from pydantic import Field
 
 
 class ChunkDocumentsArgs(BaseModel):
