@@ -21,6 +21,7 @@ from typing import Literal
 
 import mcp
 from pydantic import BaseModel, Field, model_validator
+
 from ragops_agent_ce.schemas.config_schemas import RagConfig
 
 # Package root (where compose files are stored)
@@ -309,6 +310,10 @@ class InitProjectComposeArgs(BaseModel):
         return self
 
 
+class StopContainerArgs(BaseModel):
+    container_id: str = Field(description="Container ID or name")
+
+
 class ServicePort(BaseModel):
     """Custom port mapping for a service."""
 
@@ -434,6 +439,93 @@ async def init_project_compose(args: InitProjectComposeArgs) -> mcp.types.TextCo
     }
 
     return mcp.types.TextContent(type="text", text=json.dumps(result, indent=2))
+
+
+@server.tool(
+    name="list_containers",
+    description=(
+        "List Docker containers,"
+        "if want to analyze whether container from another project occupies the same port"
+    ),
+)
+async def list_containers() -> mcp.types.TextContent:
+    """List Docker containers."""
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--format", "{{json .}}"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            containers = []
+            for line in result.stdout.strip().splitlines():
+                try:
+                    container_info = json.loads(line)
+                    containers.append(container_info)
+                except json.JSONDecodeError:
+                    continue
+            return mcp.types.TextContent(
+                type="text",
+                text=json.dumps({"status": "success", "containers": containers}, indent=2),
+            )
+        else:
+            return mcp.types.TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "status": "error",
+                        "message": "Failed to list containers",
+                        "error": result.stderr,
+                    }
+                ),
+            )
+    except Exception as e:
+        return mcp.types.TextContent(
+            type="text", text=json.dumps({"status": "error", "message": str(e)})
+        )
+
+
+@server.tool(
+    name="stop_container",
+    description=(
+        "Stop Docker container,"
+        "if want to stop container from another project that occupies the same port"
+    ),
+)
+async def stop_container(args: StopContainerArgs) -> mcp.types.TextContent:
+    """Stop a Docker container by ID or name."""
+    container_id = args.container_id
+
+    try:
+        result = subprocess.run(
+            ["docker", "stop", container_id],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            return mcp.types.TextContent(
+                type="text",
+                text=json.dumps(
+                    {"status": "success", "message": f"Container {container_id} stopped"}
+                ),
+            )
+        else:
+            return mcp.types.TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Failed to stop container {container_id}",
+                        "error": result.stderr,
+                    }
+                ),
+            )
+    except Exception as e:
+        return mcp.types.TextContent(
+            type="text", text=json.dumps({"status": "error", "message": str(e)})
+        )
 
 
 @server.tool(
