@@ -6,10 +6,11 @@ import sys
 
 from rich.align import Align
 from rich.console import Console
-from rich.padding import Padding
+from rich.layout import Layout
 from rich.panel import Panel
-from rich.table import Table
 from rich.text import Text
+
+from ragops_agent_ce.schemas.agent_schemas import AgentSettings
 
 """
 Display and rendering module for RagOps Agent CE.
@@ -45,14 +46,14 @@ def create_checklist_panel(checklist_text: str | None, *, title: str = "Checklis
         title_align="center",
         border_style="cyan",
         expand=True,
-        padding=(0, 1),
     )
 
 
-def render_screen_with_checklist(
+def render_project(
     transcript_lines: list[str],
     checklist_text: str | None = None,
     *,
+    agent_settings: AgentSettings,
     show_prompt: bool = False,
 ) -> None:
     """
@@ -65,18 +66,33 @@ def render_screen_with_checklist(
     """
     clear_screen_aggressive()
 
-    if not checklist_text:
-        render_screen(transcript_lines, show_prompt=show_prompt)
-        return
+    width, height = shutil.get_terminal_size()
+    height -= 3  # Reserve space for input prompt
+    right_width = 50
+    layout = Layout(name="root")
+    layout.split_row(
+        Layout(
+            create_transcript_panel(
+                transcript_lines,
+                width=width - right_width,
+                height=height,
+            ),
+            name="left",
+        ),
+        Layout(name="right", size=right_width),
+    )
 
-    conv_panel = create_transcript_panel(transcript_lines, title="Conversation")
-    checklist_panel = create_checklist_panel(checklist_text, title="Checklist")
+    right = layout["right"]
+    right.split_column(
+        Layout(create_status_panel(agent_settings), name="top", size=4),
+        Layout(" ", name="bottom"),
+    )
 
-    table = Table.grid(padding=(0, 2), expand=True)
-    table.add_column(ratio=7)
-    table.add_column(ratio=3)
-    table.add_row(conv_panel, Align(checklist_panel, align="center", vertical="bottom"))
-    console.print(Padding(table, (1, 0, 0, 0)))
+    if checklist_text:
+        checklist_panel = create_checklist_panel(checklist_text)
+        right["bottom"].update(checklist_panel)
+
+    console.print(layout, height=height)
 
 
 def clear_screen_aggressive() -> None:
@@ -109,7 +125,12 @@ def clear_screen_aggressive() -> None:
     sys.stdout.flush()
 
 
-def create_transcript_panel(transcript_lines: list[str], title: str = "RagOpsAgent CE") -> Panel:
+def create_transcript_panel(
+    transcript_lines: list[str],
+    width: int,
+    height: int,
+    title: str = "Conversation",
+) -> Panel:
     """
     Create a Rich panel for conversation transcript.
 
@@ -121,24 +142,26 @@ def create_transcript_panel(transcript_lines: list[str], title: str = "RagOpsAge
         Panel: Rich panel containing the transcript
     """
     lines = transcript_lines or ["[dim italic]No messages yet. Start by typing a message![/]"]
-    width, _ = shutil.get_terminal_size()
-
-    # Effective text width inside panel (minus padding and borders)
-    inner_width = max(width - 4, 10)  # 2 borders + 2 padding (approx.)
 
     wrapped_lines: list[Text] = []
     for line in lines:
         rich_text = Text.from_markup(line)
-        wrapped_parts = rich_text.wrap(console, inner_width)
+        wrapped_parts = rich_text.wrap(console, width - 2)
         wrapped_lines.extend(wrapped_parts or [Text("")])
 
-    # Show ALL lines - no height restriction, terminal will handle scrolling
+    visible_parts = wrapped_lines[-(height - 4) :]
+
     # Combine lines into panel content
-    content = Text()
-    for i, part in enumerate(wrapped_lines):
-        if i > 0:
-            content.append("\n")
-        content.append(part)
+    clipped_text = Text()
+    for part in visible_parts:
+        clipped_text.append("\n")
+        clipped_text.append(part)
+
+    content = Align(clipped_text, align="left", vertical="bottom")
+
+    kwargs = {}
+    if height is not None:
+        kwargs["height"] = height
 
     return Panel(
         content,
@@ -147,23 +170,18 @@ def create_transcript_panel(transcript_lines: list[str], title: str = "RagOpsAge
         border_style="green",
         expand=True,
         padding=(0, 1),
+        **kwargs,
     )
 
 
-def render_screen(transcript_lines: list[str], *, show_prompt: bool = False) -> None:
-    """
-    Clear screen completely and render conversation panel.
-
-    Args:
-        transcript_lines: List of transcript messages
-        show_prompt: Whether to reserve space for input prompt (affects panel height)
-    """
-    clear_screen_aggressive()
-    console.print(
-        Padding(
-            create_transcript_panel(transcript_lines, title="Conversation"),
-            (1, 0, 0, 0),
-        )
+def create_status_panel(agent_settings: AgentSettings, title: str = "Agent settings") -> Panel:
+    status_lines = [f"LLM provider: [cyan]{agent_settings.llm_provider.name}[/cyan]"]
+    if agent_settings.model:
+        status_lines.append(f"Model: [cyan]{agent_settings.model}[/cyan]")
+    return Panel(
+        Text.from_markup("\n".join(status_lines)),
+        title=f"[bold blue]{title}[/bold blue]",
+        border_style="cyan",
     )
 
 
@@ -228,43 +246,17 @@ class ScreenRenderer:
     Manages the overall screen layout and rendering coordination.
     """
 
-    def __init__(self):
-        self.last_transcript_size = 0
-
-    def render_conversation_screen(
-        self, transcript: list[str], show_input_space: bool = False
-    ) -> None:
-        """
-        Render the main conversation screen.
-
-        Args:
-            transcript: Conversation transcript lines
-            show_input_space: Whether to reserve space for input box
-        """
-        render_screen(transcript, show_prompt=show_input_space)
-        self.last_transcript_size = len(transcript)
-
-    def render_conversation_and_checklist(
+    def render_project(
         self,
         transcript: list[str],
         checklist_text: str | None,
+        agent_settings: AgentSettings,
         show_input_space: bool = False,
     ) -> None:
         """Render conversation with a checklist panel on the right."""
-        render_screen_with_checklist(transcript, checklist_text, show_prompt=show_input_space)
-        self.last_transcript_size = len(transcript)
-
-    def should_rerender(self, transcript: list[str]) -> bool:
-        """
-        Check if screen needs re-rendering based on transcript changes.
-
-        Args:
-            transcript: Current transcript
-
-        Returns:
-            bool: True if re-rendering is needed
-        """
-        return len(transcript) != self.last_transcript_size
+        render_project(
+            transcript, checklist_text, agent_settings=agent_settings, show_prompt=show_input_space
+        )
 
     def render_startup_screen(self) -> None:
         """Render the initial startup screen."""
@@ -277,6 +269,9 @@ class ScreenRenderer:
         console.print("[yellow]Commands:[/yellow]")
         console.print("  [bold]:help[/bold] - Show help")
         console.print("  [bold]:q[/bold] or [bold]:quit[/bold] - Exit")
+        console.print(
+            "  [bold]:agent <llm_provider>/<model>[/bold] - Change agent LLM provider and model"
+        )
         console.print("  [bold]:clear[/bold] - Clear conversation")
         console.print()
         console.print("[dim]Type your message and press Enter to start...[/dim]")

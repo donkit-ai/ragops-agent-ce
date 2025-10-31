@@ -10,6 +10,8 @@ from loguru import logger
 from rich.console import Console
 from rich.markup import escape
 
+from ragops_agent_ce.schemas.agent_schemas import AgentSettings
+
 try:
     import readline
 
@@ -46,7 +48,7 @@ from .config import load_settings
 from .db import close, kv_all_by_prefix, open_db
 from .display import ScreenRenderer
 from .interactive_input import get_user_input
-from .llm.provider_factory import get_provider
+from .llm.provider_factory import PROVIDER_PATHS, get_provider
 from .llm.types import Message
 from .logging_config import setup_logging
 from .mcp.client import MCPClient
@@ -243,18 +245,15 @@ def _start_repl(
 
     # Transcript buffer must be available for helper functions below
     transcript: list[str] = []
-
+    agent_settings = AgentSettings(llm_provider=prov, model=model)
     renderer = ScreenRenderer()
 
     # Helpers for rendering and transcript updates
     def _render_current_screen(show_input_space: bool) -> None:
         cl_text = _get_session_checklist()
-        if cl_text:
-            renderer.render_conversation_and_checklist(
-                transcript, cl_text, show_input_space=show_input_space
-            )
-        else:
-            renderer.render_conversation_screen(transcript, show_input_space=show_input_space)
+        renderer.render_project(
+            transcript, cl_text, agent_settings=agent_settings, show_input_space=show_input_space
+        )
 
     def _append_user_line(text: str) -> None:
         transcript.append(f"\n\n{_time_str()} [bold blue]you>[/bold blue] {escape(text)}")
@@ -327,13 +326,6 @@ def _start_repl(
     )
     renderer.render_startup_screen()
 
-    transcript.append(
-        "Current provider: "
-        + f"{settings.llm_provider}"
-        + (f", model override: {model}" if model else "")
-    )
-    transcript.append("[enhanced input enabled]" if READLINE_AVAILABLE else "[basic input mode]")
-
     # Render welcome message as markdown
     welcome_msg = (
         "Hello! I'm **Donkit - RagOps Agent**, your assistant for building RAG pipelines. "
@@ -345,6 +337,7 @@ def _start_repl(
     if show_checklist:
         watcher = ChecklistWatcherWithRenderer(
             transcript,
+            agent_settings,
             renderer,
             session_start_mtime=session_started_at,
         )
@@ -359,15 +352,59 @@ def _start_repl(
             if watcher:
                 watcher.stop()
             _sanitize_transcript(transcript)
-            cl_text = _get_session_checklist()
-            if cl_text:
-                renderer.render_conversation_and_checklist(transcript, cl_text)
-            else:
-                renderer.render_conversation_screen(transcript)
+            _render_current_screen(show_input_space=False)
             renderer.render_goodbye_screen()
             break
 
         if not user_input:
+            continue
+
+        if user_input == ":help":
+            transcript += [
+                "",
+                "  [yellow]Available commands:[/yellow]",
+                "  [bold]:help[/bold] - Show this help message",
+                "  [bold]:q[/bold] or [bold]:quit[/bold] - Exit the agent",
+                "  [bold]:clear[/bold] - Clear the conversation transcript",
+                "  [bold]:agent [cyan]<llm_provider>/<model>[/cyan][/bold] - "
+                "Change agent LLM provider and model",
+            ]
+            continue
+
+        if user_input == ":clear":
+            transcript = []
+            continue
+
+        if user_input.startswith(":agent "):
+            _render_current_screen(show_input_space=False)
+            parts = user_input[len(":agent ") :].strip().split("/", 1)
+            if len(parts) != 2:
+                transcript.append("[bold red]Error:[/bold red] Invalid agent command format.")
+                continue
+            new_provider, new_model = parts
+            if new_provider not in PROVIDER_PATHS:
+                transcript.append(
+                    f"[bold red]Error:[/bold red] Unknown provider '{new_provider}'. "
+                    f"Available providers: {', '.join(PROVIDER_PATHS.keys())}."
+                )
+                continue
+            os.environ["RAGOPS_LLM_PROVIDER"] = new_provider
+            settings = settings.model_copy(update={"llm_provider": new_provider})
+            prov = get_provider(settings)
+            agent_settings.llm_provider = prov
+            agent_settings.model = new_model
+            model = new_model
+            agent = LLMAgent(
+                prov,
+                tools=tools,
+                mcp_clients=mcp_clients,
+            )
+            transcript.append(
+                "[bold cyan]Agent updated:[/bold cyan] "
+                f"Provider set to [yellow]{new_provider}[/yellow], "
+                f"Model set to [yellow]{new_model}[/yellow]."
+            )
+            _render_current_screen(show_input_space=True)
             continue
 
         if user_input in {":q", ":quit", ":exit", "exit", "quit"}:
@@ -376,10 +413,7 @@ def _start_repl(
                 watcher.stop()
             _sanitize_transcript(transcript)
             cl_text = _get_session_checklist()
-            if cl_text:
-                renderer.render_conversation_and_checklist(transcript, cl_text)
-            else:
-                renderer.render_conversation_screen(transcript)
+            renderer.render_project(transcript, cl_text, agent_settings=agent_settings)
             renderer.render_goodbye_screen()
             break
 
