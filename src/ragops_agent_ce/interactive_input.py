@@ -47,7 +47,7 @@ class InteractiveInputBox:
         self.cursor_pos = 0
         self.cursor_visible = True
         self.last_blink = time.time()
-        self.blink_interval = 5  # seconds
+        self.blink_interval = 0.5  # seconds
 
     def _create_input_panel(self, text: str, cursor: int, show_cursor: bool) -> Panel:
         """Create input panel with current text and cursor."""
