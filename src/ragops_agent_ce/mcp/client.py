@@ -2,12 +2,61 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+from pathlib import Path
 from typing import Any
 
 from dotenv import dotenv_values, find_dotenv
 from loguru import logger
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+
+
+def _load_env_for_mcp() -> dict[str, str | None]:
+    """Load environment variables for MCP server.
+
+    Combines:
+    1. Current os.environ (so MCP server inherits parent env)
+    2. Variables from .env files (with multiple search strategies for Windows compatibility)
+
+    Returns dict suitable for StdioServerParameters(env=...)
+    """
+    # Start with current environment
+    env = dict(os.environ)
+
+    # Try to load from .env files in multiple locations
+    env_loaded = False
+    for fname in (".env.local", ".env"):
+        # 1. Current working directory
+        cwd_path = Path.cwd() / fname
+        if cwd_path.exists():
+            env.update(dotenv_values(cwd_path))
+            env_loaded = True
+            logger.debug(f"Loaded MCP env from {cwd_path}")
+
+        # 2. Parent directories (walk up 3 levels)
+        parent = Path.cwd()
+        for _ in range(4):
+            parent = parent.parent
+            parent_env = parent / fname
+            if parent_env.exists():
+                env.update(dotenv_values(parent_env))
+                env_loaded = True
+                logger.debug(f"Loaded MCP env from {parent_env}")
+                break
+
+        # 3. Fallback to find_dotenv
+        if not env_loaded:
+            found = find_dotenv(filename=fname, usecwd=True)
+            if found:
+                env.update(dotenv_values(found))
+                env_loaded = True
+                logger.debug(f"Loaded MCP env from {found}")
+
+    if not env_loaded:
+        logger.debug("No .env file found for MCP server, using current environment only")
+
+    return env
 
 
 class MCPClient:
@@ -25,7 +74,7 @@ class MCPClient:
 
     async def _alist_tools(self) -> list[dict]:
         server_params = StdioServerParameters(
-            command=self.command, args=self.args, env=dotenv_values(find_dotenv(usecwd=True))
+            command=self.command, args=self.args, env=_load_env_for_mcp()
         )
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
@@ -69,7 +118,7 @@ class MCPClient:
     async def _acall_tool(self, name: str, arguments: dict[str, Any]) -> str:
         logger.debug(f"Calling tool {name} with arguments {arguments}")
         server_params = StdioServerParameters(
-            command=self.command, args=self.args, env=dotenv_values(find_dotenv(usecwd=True))
+            command=self.command, args=self.args, env=_load_env_for_mcp()
         )
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:

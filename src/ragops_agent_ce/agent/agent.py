@@ -247,10 +247,6 @@ class LLMAgent:
             Iterator that yields StreamEvent objects.
         """
         if not self.provider.supports_streaming():
-            logger.warning(
-                f"{self.provider.name} provider does not support streaming, "
-                "falling back to regular respond()"
-            )
             # Yield the full response as a single content event
             yield StreamEvent(type="content", content=self.respond(messages, model=model))
             return
@@ -258,70 +254,60 @@ class LLMAgent:
         tools = self._tool_specs() if self.provider.supports_tools() else None
 
         for _ in range(self.max_iterations):
-            # Use streaming generation
-            accumulated_text = ""
-            accumulated_tool_calls = None
-
             for chunk in self.provider.generate_stream(messages, tools=tools, model=model):
                 # Yield text chunks as they arrive
                 if chunk.content:
-                    accumulated_text += chunk.content
                     yield StreamEvent(type="content", content=chunk.content)
 
-                # Check for tool calls in final chunk
-                if chunk.tool_calls:
-                    accumulated_tool_calls = chunk.tool_calls
+                # Handle tool calls immediately when they arrive
+                if chunk.tool_calls and self.provider.supports_tools():
+                    # Append synthetic assistant turn
+                    self._append_synthetic_assistant_turn(messages, chunk.tool_calls)
 
-            # Handle tool calls if present
-            if accumulated_tool_calls and self.provider.supports_tools():
-                # Append synthetic assistant turn
-                self._append_synthetic_assistant_turn(messages, accumulated_tool_calls)
+                    # Execute each tool and yield events
+                    for tc in chunk.tool_calls:
+                        args = self._parse_tool_args(tc)
 
-                # Execute each tool and yield events
-                for tc in accumulated_tool_calls:
-                    args = self._parse_tool_args(tc)
-
-                    # Yield tool call start event
-                    yield StreamEvent(
-                        type="tool_call_start", tool_name=tc.function.name, tool_args=args
-                    )
-
-                    try:
-                        # Execute tool
-                        result_str = self._execute_tool_call(tc, args)
-                        # Add tool result to messages
-                        messages.append(
-                            Message(
-                                role="tool",
-                                name=tc.function.name,
-                                tool_call_id=tc.id,
-                                content=result_str,
-                            )
-                        )
-                        # Yield tool call end event
-                        yield StreamEvent(type="tool_call_end", tool_name=tc.function.name)
-                    except Exception as e:
-                        error_msg = str(e)
-                        logger.error(f"Tool {tc.function.name} failed: {error_msg}")
-                        # Add error as tool result
-                        messages.append(
-                            Message(
-                                role="tool",
-                                name=tc.function.name,
-                                tool_call_id=tc.id,
-                                content=f"Error: {error_msg}",
-                            )
-                        )
-                        # Yield tool call error event
+                        # Yield tool call start event
                         yield StreamEvent(
-                            type="tool_call_error", tool_name=tc.function.name, error=error_msg
+                            type="tool_call_start", tool_name=tc.function.name, tool_args=args
                         )
 
-                # Continue loop to give tool results back to the model
-                continue
-
-            # Done - all chunks have been yielded
-            return
-
+                        try:
+                            # Execute tool
+                            result_str = self._execute_tool_call(tc, args)
+                            # Add tool result to messages
+                            messages.append(
+                                Message(
+                                    role="tool",
+                                    name=tc.function.name,
+                                    tool_call_id=tc.id,
+                                    content=result_str,
+                                )
+                            )
+                            # Yield tool call end event
+                            yield StreamEvent(type="tool_call_end", tool_name=tc.function.name)
+                        except Exception as e:
+                            error_msg = str(e)
+                            logger.error(f"Tool {tc.function.name} failed: {error_msg}")
+                            # Add error as tool result
+                            messages.append(
+                                Message(
+                                    role="tool",
+                                    name=tc.function.name,
+                                    tool_call_id=tc.id,
+                                    content=f"Error: {error_msg}",
+                                )
+                            )
+                            # Yield tool call error event
+                            yield StreamEvent(
+                                type="tool_call_error", tool_name=tc.function.name, error=error_msg
+                            )
+                    # Break inner loop to start new iteration with tool results
+                    break
+            else:
+                # Stream finished without tool calls - done
+                return
+            # Continue outer loop - send tool results back to model
         # Max iterations reached
         return
