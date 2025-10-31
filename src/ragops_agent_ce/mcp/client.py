@@ -4,6 +4,7 @@ import asyncio
 import json
 from typing import Any
 
+from dotenv import dotenv_values, find_dotenv
 from loguru import logger
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -23,7 +24,9 @@ class MCPClient:
         self.timeout = timeout
 
     async def _alist_tools(self) -> list[dict]:
-        server_params = StdioServerParameters(command=self.command, args=self.args)
+        server_params = StdioServerParameters(
+            command=self.command, args=self.args, env=dotenv_values(find_dotenv(usecwd=True))
+        )
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -65,7 +68,9 @@ class MCPClient:
 
     async def _acall_tool(self, name: str, arguments: dict[str, Any]) -> str:
         logger.debug(f"Calling tool {name} with arguments {arguments}")
-        server_params = StdioServerParameters(command=self.command, args=self.args)
+        server_params = StdioServerParameters(
+            command=self.command, args=self.args, env=dotenv_values(find_dotenv(usecwd=True))
+        )
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()

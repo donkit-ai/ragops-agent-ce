@@ -6,10 +6,7 @@ from pathlib import Path
 
 import mcp
 from donkit.chunker import ChunkerConfig, DonkitChunker
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-
-load_dotenv()
 
 
 class ChunkDocumentsArgs(BaseModel):

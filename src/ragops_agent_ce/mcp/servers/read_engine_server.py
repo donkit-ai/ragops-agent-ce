@@ -9,11 +9,8 @@ from typing import Literal
 
 import mcp
 from donkit.read_engine.read_engine import DonkitReader
-from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel, Field
-
-load_dotenv()
 
 
 class ProcessDocumentsArgs(BaseModel):

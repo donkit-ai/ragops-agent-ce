@@ -2,7 +2,7 @@ RAGOPS_LOGO_TEXT = """
    ████  █████ ████  ██ ██ ██ ████
    ██ ██ ██ ██ ██ ██ ████  ██  ██
    ████  █████ ██ ██ ██ ██ ██  ██
-    RAGOps Community Edition 1.0
+    RAGOps Community Edition 0.2
 """
 
 RAGOPS_LOGO_ART = """

@@ -20,12 +20,8 @@ from pathlib import Path
 from typing import Literal
 
 import mcp
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field, model_validator
 from ragops_agent_ce.schemas.config_schemas import RagConfig
-
-load_dotenv()
-
 
 # Package root (where compose files are stored)
 PACKAGE_ROOT = Path(__file__).parent.parent.parent
@@ -498,9 +494,19 @@ async def start_service(args: StartServiceArgs) -> mcp.types.TextContent:
             ),
         )
 
-    # Build command with profile
+    # Build command with profile and explicit project name
     cmd = get_compose_command()
-    cmd.extend(["-f", convert_path_for_docker(compose_file), "--profile", profile, "up"])
+    cmd.extend(
+        [
+            "-f",
+            convert_path_for_docker(compose_file),
+            "--project-name",
+            f"ragops-{args.project_id}",
+            "--profile",
+            profile,
+            "up",
+        ]
+    )
 
     if detach:
         cmd.append("-d")
@@ -653,7 +659,17 @@ async def stop_service(args: StopServiceArgs) -> mcp.types.TextContent:
         )
 
     cmd = get_compose_command()
-    cmd.extend(["-f", convert_path_for_docker(compose_file), "--profile", profile, "down"])
+    cmd.extend(
+        [
+            "-f",
+            convert_path_for_docker(compose_file),
+            "--project-name",
+            f"ragops-{args.project_id}",
+            "--profile",
+            profile,
+            "down",
+        ]
+    )
 
     if remove_volumes:
         cmd.append("-v")
@@ -749,6 +765,8 @@ async def service_status(args: ServiceStatusArgs) -> mcp.types.TextContent:
                     *cmd,
                     "-f",
                     convert_path_for_docker(compose_file),
+                    "--project-name",
+                    f"ragops-{args.project_id}",
                     "--profile",
                     profile,
                     "ps",
@@ -823,6 +841,8 @@ async def get_logs(args: GetLogsArgs) -> mcp.types.TextContent:
         [
             "-f",
             convert_path_for_docker(compose_file),
+            "--project-name",
+            f"ragops-{args.project_id}",
             "--profile",
             profile,
             "logs",
