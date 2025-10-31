@@ -10,11 +10,20 @@ from __future__ import annotations
 import json
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from ragops_agent_ce.display import ScreenRenderer
 from ragops_agent_ce.schemas.agent_schemas import AgentSettings
+
+
+@dataclass
+class ActiveChecklist:
+    name: str | None = None
+
+
+active_checklist = ActiveChecklist()
 
 
 def _list_checklists() -> list[tuple[str, float]]:
@@ -273,20 +282,33 @@ def get_active_checklist_text(since_ts: float | None = None) -> str | None:
     Returns:
         str | None: Rich-formatted checklist if active, otherwise None
     """
+
+    def _get_checklist(filename: str) -> str | None:
+        data = _load_checklist(filename)
+        if not data or "items" not in data:
+            return None
+        items = data.get("items", [])
+        has_active = any(item.get("status", "pending") != "completed" for item in items)
+        if not has_active:
+            return None
+        return format_checklist_compact(data)
+
     checklists = _list_checklists()
     if not checklists:
         return None
 
+    if active_checklist.name:
+        checklist = _get_checklist(active_checklist.name)
+        if checklist is None:
+            active_checklist.name = None
+        else:
+            return checklist
+
     for filename, mtime in reversed(checklists):
         if since_ts is not None and mtime < since_ts:
             continue
-        data = _load_checklist(filename)
-        if not data or "items" not in data:
-            continue
-        items = data.get("items", [])
-        has_active = any(item.get("status", "pending") != "completed" for item in items)
-        if not has_active:
-            continue
-        return format_checklist_compact(data)
+        data = _get_checklist(filename)
+        if data is not None:
+            return data
 
     return None
