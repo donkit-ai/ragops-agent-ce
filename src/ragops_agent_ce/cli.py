@@ -244,7 +244,7 @@ def _start_repl(
         history.append(Message(role="system", content=system))
 
     # Transcript buffer must be available for helper functions below
-    transcript: list[str] = []
+    transcript: list[str] = [""] * 100
     agent_settings = AgentSettings(llm_provider=prov, model=model)
     renderer = ScreenRenderer()
 
@@ -372,7 +372,7 @@ def _start_repl(
             continue
 
         if user_input == ":clear":
-            transcript = []
+            transcript = [""] * 100
             continue
 
         if user_input.startswith(":agent "):

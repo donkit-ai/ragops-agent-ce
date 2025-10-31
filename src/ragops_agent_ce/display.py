@@ -148,12 +148,10 @@ def create_transcript_panel(
         wrapped_parts = rich_text.wrap(console, width)
         wrapped_lines.extend(wrapped_parts or [Text("")])
 
-    # Show ALL lines - no height restriction, terminal will handle scrolling
     # Combine lines into panel content
     content = Text()
-    for i, part in enumerate(wrapped_lines):
-        if i > 0:
-            content.append("\n")
+    for part in wrapped_lines[-(height - 3) :]:
+        content.append("\n")
         content.append(part)
 
     kwargs = {}
