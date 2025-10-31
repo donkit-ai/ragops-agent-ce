@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "donkit-ragops-ce"
-version = "0.2.25"
+version = "0.2.26"
 description = "Community Edition CLI agent for building RAG pipelines"
 authors = ["Donkit AI <opensource@donkit.ai>"]
 license = "MIT"
@@ -30,7 +30,7 @@ donkit-vectorstore-loader = "^0.1.4"
 donkit-embeddings = "^0.1.1"
 langchain-openai = "^0.3.35"
 langchain-community = "^0.3.31"
-donkit-read-engine = "^0.1.12"
+donkit-read-engine = "^0.1.13"
 
 [tool.poetry.scripts]
 donkit-ragops-ce = "ragops_agent_ce.cli:app"
