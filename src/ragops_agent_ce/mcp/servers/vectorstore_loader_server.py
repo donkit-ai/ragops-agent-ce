@@ -7,13 +7,10 @@ from uuid import uuid4
 import mcp
 from donkit.embeddings import get_vertexai_embeddings
 from donkit.vectorstore_loader import create_vectorstore_loader
-from dotenv import load_dotenv
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_openai import AzureOpenAIEmbeddings, OpenAIEmbeddings
 from pydantic import BaseModel, Field, validate_call
-
-load_dotenv()
 
 
 def create_embedder(embedder_type: str) -> Embeddings:

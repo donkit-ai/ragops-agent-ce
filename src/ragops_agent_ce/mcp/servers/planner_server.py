@@ -4,11 +4,8 @@ import os
 import re
 
 import mcp
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field, model_validator
 from ragops_agent_ce.schemas.config_schemas import RagConfig
-
-load_dotenv()
 
 
 class RagConfigPlanArgs(BaseModel):

@@ -4,10 +4,7 @@ from pathlib import Path
 from typing import List, Literal, Optional
 
 import mcp
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field, validate_call
-
-load_dotenv()
 
 
 class ChecklistItem(BaseModel):

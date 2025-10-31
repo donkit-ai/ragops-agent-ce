@@ -21,10 +21,10 @@ class OpenAIProvider(LLMProvider):
         model_name: str | None = None,
     ) -> None:
         self.settings = settings or load_settings()
-        if not self.settings.openai_api_key:
-            raise ValueError("OPENAI_API_KEY is not set")
+        # API key is required for real OpenAI, but not for Ollama/OpenRouter
+        api_key = self.settings.openai_api_key or "not-needed"
         self._client = OpenAI(
-            api_key=self.settings.openai_api_key,
+            api_key=api_key,
             base_url=self.settings.openai_base_url,
             timeout=60.0,
         )

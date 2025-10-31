@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import time
 
@@ -123,31 +124,6 @@ def ping() -> None:
     console.print("pong")
 
 
-@app.command()
-def grep(
-    pattern: str = typer.Argument(..., help="The regex pattern to search for."),
-    include: str = typer.Option(
-        "",
-        "--include",
-        "-i",
-        help="File pattern to include in the search (e.g., '*.py', '*.{ts,tsx}').",
-    ),
-    path: str = typer.Option(
-        ".",
-        "--path",
-        "-p",
-        help="The directory to search in. Defaults to current working directory.",
-    ),
-) -> None:
-    """Searches file contents using regular expressions with ripgrep (rg)."""
-    from .agent.tools import tool_grep
-
-    tool = tool_grep()
-    args = {"pattern": pattern, "include": include, "path": path}
-    result = tool.handler(args)
-    console.print(result)
-
-
 DEFAULT_MCP_COMMANDS = [
     "ragops-compose-manager",
     "ragops-rag-planner",
@@ -212,8 +188,6 @@ def _render_markdown_to_rich(text: str) -> str:
     # Simple markdown to rich markup conversion without full rendering
     # This preserves the transcript panel formatting
 
-    import re
-
     # Bold: **text** -> [bold]text[/bold]
     result = re.sub(r"\*\*(.+?)\*\*", r"[bold]\1[/bold]", text)
 
@@ -232,47 +206,6 @@ def _render_markdown_to_rich(text: str) -> str:
     # Numbered lists: 1. text -> 1. text (keep as is)
 
     return result
-
-
-def _create_tool_call_handler(transcript: list[str], current_response_index: list[int | None]):
-    """Create a tool call handler that adds messages to transcript inline with agent response."""
-
-    def _display_tool_call(
-        tool_name: str, args: dict, status: str, result=None, error=None
-    ) -> None:
-        """Display tool execution in a nice format and add to transcript inline."""
-        if status == "executing":
-            # Format args nicely for console only (not saved to transcript)
-            args_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in args.items())
-            msg = f"  [dim]🔧 Executing tool:[/dim] [yellow]{tool_name}[/yellow]({args_str})"
-            console.print(msg)
-        elif status == "success":
-            # Add completed message inline after current response
-            msg = f"  [dim]✓ Tool:[/dim] [green]{tool_name}[/green]"
-            console.print(msg)
-
-            # Insert into transcript right after the current agent response
-            if current_response_index[0] is not None:
-                insert_pos = current_response_index[0] + 1
-                transcript.insert(insert_pos, f"{_time_str()} {msg}")
-                # Update the index since we inserted a line
-                current_response_index[0] = insert_pos
-        elif status == "error":
-            msg = f"  [dim]✗ Tool failed:[/dim] [red]{tool_name}[/red] - {error}"
-            console.print(msg)
-            if current_response_index[0] is not None:
-                insert_pos = current_response_index[0] + 1
-                transcript.insert(insert_pos, f"{_time_str()} {msg}")
-                current_response_index[0] = insert_pos
-        elif status == "not_found":
-            msg = f"  [dim]? Tool not found:[/dim] [red]{tool_name}[/red]"
-            console.print(msg)
-            if current_response_index[0] is not None:
-                insert_pos = current_response_index[0] + 1
-                transcript.insert(insert_pos, f"{_time_str()} {msg}")
-                current_response_index[0] = insert_pos
-
-    return _display_tool_call
 
 
 def _start_repl(
@@ -329,15 +262,12 @@ def _start_repl(
         return get_active_checklist_text(session_started_at)
 
     transcript: list[str] = []
-    # Track current response position for inline tool call insertion
-    current_response_index: list[int | None] = [None]
 
-    # Create agent with tool call handler that adds to transcript inline
+    # Create agent
     agent = LLMAgent(
         prov,
         tools=tools,
         mcp_clients=mcp_clients,
-        tool_call_callback=_create_tool_call_handler(transcript, current_response_index),
     )
     renderer.render_startup_screen()
 
@@ -413,53 +343,79 @@ def _start_repl(
 
         try:
             history.append(Message(role="user", content=user_input))
-
             # Use streaming if provider supports it
             if prov.supports_streaming():
                 reply = ""
                 interrupted = False
 
-                # Add placeholder to transcript and set index BEFORE generation starts
-                # This ensures tool calls are inserted in the right place
+                # Add placeholder to transcript
                 transcript.append(f"{_time_str()} [bold green]RagOps Agent>[/bold green] ")
-                current_response_index[0] = len(transcript) - 1
-
-                # Print prefix without re-rendering entire screen
-                console.print(
-                    f"{_time_str()} [bold green]RagOps Agent>[/bold green] ",
-                    end="",
-                )
+                response_index = len(transcript) - 1
 
                 try:
-                    # Stream chunks directly to console without screen re-renders
-                    for chunk in agent.respond_stream(history, model=model):
-                        reply += chunk
-                        # Print chunk directly - no screen clearing/merging
-                        console.print(chunk, end="", markup=False)
+                    # Accumulate everything in display order
+                    display_content = ""
+                    # Temporary message shown only during execution
+                    temp_executing = ""
+
+                    # Stream events - process content and tool calls
+                    for event in agent.respond_stream(history, model=model):
+                        if event.type == "content":
+                            # Accumulate content for history
+                            reply += event.content or ""
+                            # Add content to display only if not already there
+                            content_chunk = event.content or ""
+                            if content_chunk and content_chunk not in display_content:
+                                display_content += content_chunk
+                        elif event.type == "tool_call_start":
+                            # Show temporary executing message (not added to display_content)
+                            args_str = ", ".join(event.tool_args.keys()) if event.tool_args else ""
+                            temp_executing = (
+                                f"\n\n[dim]🔧 Executing tool:[/dim] "
+                                f"[yellow]{event.tool_name}[/yellow]({args_str})"
+                            )
+                        elif event.type == "tool_call_end":
+                            # Clear temp message and add success to permanent content
+                            temp_executing = ""
+                            msg = f"\n[dim]✓ Tool:[/dim] [green]{event.tool_name}[/green]\n"
+                            display_content += msg
+                        elif event.type == "tool_call_error":
+                            # Clear temp message and add error to permanent content
+                            temp_executing = ""
+                            msg = (
+                                f"\n[dim]✗ Tool failed:[/dim] "
+                                f"\[red]{event.tool_name}[/red] - {event.error}\n"
+                            )
+                            display_content += msg
+
+                        # Update transcript with permanent content + temporary executing message
+                        transcript[response_index] = (
+                            f"{_time_str()} [bold green]RagOps Agent>[/bold green] "
+                            f"{display_content}{temp_executing}"
+                        )
+
+                        # Re-render screen after each event
+                        cl_text = _get_session_checklist()
+                        if cl_text:
+                            renderer.render_conversation_and_checklist(
+                                transcript, cl_text, show_input_space=False
+                            )
+                        else:
+                            renderer.render_conversation_screen(transcript, show_input_space=False)
                 except KeyboardInterrupt:
                     interrupted = True
-                    console.print("\n[yellow]⚠ Generation interrupted by user[/yellow]")
-
-                # Print newline after streaming completes (if not interrupted)
-                if not interrupted:
-                    console.print()
-
-                # Replace placeholder with actual response
-                if reply:  # Only add if we got some response
-                    rendered_reply = _render_markdown_to_rich(reply)
-                    transcript[current_response_index[0]] = (
-                        f"{_time_str()} [bold green]RagOps Agent>[/bold green] {rendered_reply}"
+                    transcript[response_index] = (
+                        f"{_time_str()} [yellow]⚠ Generation interrupted by user[/yellow]"
                     )
+
+                # Add to history if we got a response
+                if reply and not interrupted:
                     history.append(Message(role="assistant", content=reply))
-                elif interrupted:
-                    transcript[current_response_index[0]] = (
-                        f"{_time_str()} [yellow]Generation interrupted[/yellow]"
-                    )
             else:
                 # Fall back to non-streaming mode
-                # Add placeholder and set index BEFORE generation
+                # Add placeholder
                 transcript.append(f"{_time_str()} [bold green]RagOps Agent>[/bold green] ")
-                current_response_index[0] = len(transcript) - 1
+                response_index = len(transcript) - 1
 
                 try:
                     reply = agent.respond(history, model=model)
@@ -467,12 +423,12 @@ def _start_repl(
 
                     # Replace placeholder with actual response
                     rendered_reply = _render_markdown_to_rich(reply)
-                    transcript[current_response_index[0]] = (
+                    transcript[response_index] = (
                         f"{_time_str()} [bold green]RagOps Agent>[/bold green] {rendered_reply}"
                     )
                 except KeyboardInterrupt:
                     console.print("\n[yellow]⚠ Generation interrupted by user[/yellow]")
-                    transcript[current_response_index[0]] = (
+                    transcript[response_index] = (
                         f"{_time_str()} [yellow]Generation interrupted[/yellow]"
                     )
         except Exception as e:

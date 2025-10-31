@@ -5,10 +5,7 @@ import os
 
 import httpx
 import mcp
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-
-load_dotenv()
 
 
 class SearchQueryArgs(BaseModel):
