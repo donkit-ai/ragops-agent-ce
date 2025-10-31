@@ -68,6 +68,7 @@ File Tracking (⚠️ CRITICAL for incremental updates)
 Checklist Protocol
 • Checklist name: checklist_<project_id>
 • Always create after project creation
+• Always load checklist when loading existing project
 • Status flow: in_progress → completed
 
 ⸻
