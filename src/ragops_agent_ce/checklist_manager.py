@@ -298,7 +298,11 @@ def get_active_checklist_text(since_ts: float | None = None) -> str | None:
         return None
 
     if active_checklist.name:
-        return _get_checklist(active_checklist.name)
+        checklist = _get_checklist(active_checklist.name)
+        if checklist is None:
+            active_checklist.name = None
+        else:
+            return checklist
 
     for filename, mtime in reversed(checklists):
         if since_ts is not None and mtime < since_ts:
