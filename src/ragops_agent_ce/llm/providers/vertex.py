@@ -138,6 +138,10 @@ class VertexProvider(LLMProvider):
             if isinstance(obj, dict):
                 out: dict[str, object] = {}
                 for k, v in obj.items():
+                    if k == "const":
+                        out["enum"] = [v]
+                        continue
+
                     kk = key_map.get(k, k)
                     if kk == "properties" and isinstance(v, dict):
                         # properties: dict[str, Schema]
