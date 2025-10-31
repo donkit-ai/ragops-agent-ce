@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 
+from rich.align import Align
 from rich.console import Console
 from rich.layout import Layout
 from rich.panel import Panel
@@ -67,7 +68,7 @@ def render_project(
 
     width, height = shutil.get_terminal_size()
     height -= 3  # Reserve space for input prompt
-    right_width = 40
+    right_width = 50
     layout = Layout(name="root")
     layout.split_row(
         Layout(
@@ -145,14 +146,18 @@ def create_transcript_panel(
     wrapped_lines: list[Text] = []
     for line in lines:
         rich_text = Text.from_markup(line)
-        wrapped_parts = rich_text.wrap(console, width)
+        wrapped_parts = rich_text.wrap(console, width - 2)
         wrapped_lines.extend(wrapped_parts or [Text("")])
 
+    visible_parts = wrapped_lines[-(height - 4) :]
+
     # Combine lines into panel content
-    content = Text()
-    for part in wrapped_lines[-(height - 3) :]:
-        content.append("\n")
-        content.append(part)
+    clipped_text = Text()
+    for part in visible_parts:
+        clipped_text.append("\n")
+        clipped_text.append(part)
+
+    content = Align(clipped_text, align="left", vertical="bottom")
 
     kwargs = {}
     if height is not None:
