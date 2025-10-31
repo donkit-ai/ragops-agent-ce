@@ -13,6 +13,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+from ragops_agent_ce.display import ScreenRenderer
+from ragops_agent_ce.schemas.agent_schemas import AgentSettings
+
 
 def _list_checklists() -> list[tuple[str, float]]:
     """Return list of all checklist files with their modification times."""
@@ -105,10 +108,6 @@ def format_checklist_compact(checklist_data: dict[str, Any] | None) -> str:
 
         lines.append(f"  {icon} {content_style}")
 
-    # Separator
-    lines.append("")
-    lines.append("[dim]" + "─" * 50 + "[/dim]")
-
     return "\n".join(lines)
 
 
@@ -119,8 +118,14 @@ class ChecklistWatcher:
     Manages background thread for file monitoring and transcript integration.
     """
 
-    def __init__(self, transcript_ref: list[str], session_start_mtime: float | None = None):
+    def __init__(
+        self,
+        transcript_ref: list[str],
+        agent_settings: AgentSettings,
+        session_start_mtime: float | None = None,
+    ):
         self.transcript_ref = transcript_ref
+        self.agent_settings = agent_settings
         self.session_start_mtime = session_start_mtime
 
         # Initialize last_seen_mtime to current newest file time to ignore existing checklists
@@ -224,10 +229,11 @@ class ChecklistWatcherWithRenderer(ChecklistWatcher):
     def __init__(
         self,
         transcript_ref: list[str],
-        renderer=None,
+        agent_settings: AgentSettings,
+        renderer: ScreenRenderer | None = None,
         session_start_mtime: float | None = None,
     ):
-        super().__init__(transcript_ref, session_start_mtime=session_start_mtime)
+        super().__init__(transcript_ref, agent_settings, session_start_mtime=session_start_mtime)
         self.renderer = renderer
 
     def _on_checklist_updated(self) -> None:
@@ -235,14 +241,12 @@ class ChecklistWatcherWithRenderer(ChecklistWatcher):
         if self.renderer:
             try:
                 cl_text = get_active_checklist_text(self.session_start_mtime)
-                if cl_text:
-                    self.renderer.render_conversation_and_checklist(
-                        self.transcript_ref, cl_text, show_input_space=True
-                    )
-                else:
-                    self.renderer.render_conversation_screen(
-                        self.transcript_ref, show_input_space=True
-                    )
+                self.renderer.render_project(
+                    self.transcript_ref,
+                    cl_text,
+                    agent_settings=self.agent_settings,
+                    show_input_space=True,
+                )
             except Exception:
                 pass  # Ignore render errors during input
 

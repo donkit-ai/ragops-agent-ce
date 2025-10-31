@@ -24,9 +24,9 @@ def __get_vertex_credentials():
     return credentials_data
 
 
-def get_provider(settings: Settings | None = None) -> LLMProvider:
+def get_provider(settings: Settings | None = None, llm_provider: str | None = None) -> LLMProvider:
     cfg = settings or load_settings()
-    provider_key = (cfg.llm_provider or "mock").lower()
+    provider_key = (llm_provider or cfg.llm_provider or "mock").lower()
     path = PROVIDER_PATHS.get(provider_key)
     if not path:
         raise ValueError(f"Unknown LLM provider: {provider_key}")

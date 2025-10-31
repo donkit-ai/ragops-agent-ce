@@ -69,3 +69,6 @@ ignore_missing_imports = true
 [build-system]
 requires = ["poetry-core>=1.9.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff.lint.isort]
+force-single-line = true

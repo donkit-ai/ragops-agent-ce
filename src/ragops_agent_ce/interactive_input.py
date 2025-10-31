@@ -69,7 +69,7 @@ class InteractiveInputBox:
                 content.append("ype your message... ", style="dim")
             else:
                 content.append("Type your message... ", style="dim")
-            content.append("(:q to quit)", style="yellow dim")
+            content.append("(:q to quit, :help to list commands)", style="yellow dim")
         else:
             content.append(text, style="white")
             if show_cursor:
