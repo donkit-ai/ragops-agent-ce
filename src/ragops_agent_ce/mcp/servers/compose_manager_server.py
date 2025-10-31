@@ -20,9 +20,8 @@ from pathlib import Path
 from typing import Literal
 
 import mcp
-from pydantic import BaseModel
-from pydantic import Field
-from pydantic import model_validator
+from pydantic import BaseModel, Field, model_validator
+
 from ragops_agent_ce.schemas.config_schemas import RagConfig
 
 # Package root (where compose files are stored)
@@ -214,6 +213,12 @@ def generate_env_file(
         "# -----------------------------------------------------------------------------",
         "",
         f"PROJECT_ID={project_id}",
+        f"QDRANT_CONTAINER_NAME={project_id}_qdrant",
+        f"CHROMA_CONTAINER_NAME={project_id}_chroma",
+        f"MILVUS_ETCD_CONTAINER_NAME={project_id}_milvus_etcd",
+        f"MILVUS_MINIO_CONTAINER_NAME={project_id}_milvus_minio",
+        f"MILVUS_STANDALONE_CONTAINER_NAME={project_id}_milvus_standalone",
+        f"RAG_SERVICE_CONTAINER_NAME={project_id}_rag_service",
         "",
         "# -----------------------------------------------------------------------------",
         "# LLM Provider Credentials",
