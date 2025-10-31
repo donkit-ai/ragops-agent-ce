@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -41,25 +42,21 @@ except ImportError:
     READLINE_AVAILABLE = False
 
 from . import __version__
-from .agent.agent import LLMAgent
-from .agent.agent import default_tools
-from .agent.prompts import OPENAI_SYSTEM_PROMPT
-from .agent.prompts import VERTEX_SYSTEM_PROMPT
-from .checklist_manager import ChecklistWatcherWithRenderer
-from .checklist_manager import get_active_checklist_text
+from .agent.agent import LLMAgent, default_tools
+from .agent.prompts import OPENAI_SYSTEM_PROMPT, VERTEX_SYSTEM_PROMPT
+from .checklist_manager import (
+    ChecklistWatcherWithRenderer,
+    active_checklist,
+    get_active_checklist_text,
+)
 from .config import load_settings
-from .db import close
-from .db import kv_all_by_prefix
-from .db import open_db
 from .display import ScreenRenderer
 from .interactive_input import get_user_input
-from .llm.provider_factory import PROVIDER_PATHS
-from .llm.provider_factory import get_provider
+from .llm.provider_factory import PROVIDER_PATHS, get_provider
 from .llm.types import Message
 from .logging_config import setup_logging
 from .mcp.client import MCPClient
-from .prints import RAGOPS_LOGO_ART
-from .prints import RAGOPS_LOGO_TEXT
+from .prints import RAGOPS_LOGO_ART, RAGOPS_LOGO_TEXT
 from .setup_wizard import run_setup_if_needed
 
 app = typer.Typer(
@@ -142,49 +139,6 @@ DEFAULT_MCP_COMMANDS = [
     "ragops-checklist",
     "ragops-rag-query",
 ]
-
-
-def _list_existing_projects() -> list[dict]:
-    """Get list of existing projects from database."""
-    import json
-
-    db = open_db()
-    try:
-        all_projects_raw = kv_all_by_prefix(db, "project_")
-        projects = [json.loads(value) for _, value in all_projects_raw]
-        return projects
-    finally:
-        close(db)
-
-
-def _format_projects_for_transcript(projects: list[dict]) -> list[str]:
-    """Format projects as transcript lines."""
-    lines = []
-
-    if not projects:
-        lines.append("[dim]No existing projects found. Start a new one![/dim]")
-        return lines
-
-    lines.append("[bold cyan]Existing Projects:[/bold cyan]")
-    for i, project in enumerate(projects, 1):
-        project_id = project.get("project_id", "unknown")
-        goal = project.get("goal", "No goal set")
-        status = project.get("status", "unknown")
-
-        # Truncate long goals
-        if len(goal) > 60:
-            goal = goal[:57] + "..."
-
-        status_color = (
-            "green" if status == "completed" else "yellow" if status == "in_progress" else "white"
-        )
-        lines.append(
-            f"  {i}. [bold]{project_id}[/bold] - {goal} [{status_color}]({status})[/{status_color}]"
-        )
-
-    lines.append("")
-    lines.append("[dim]You can continue any project by mentioning its ID in your message.[/dim]")
-    return lines
 
 
 def _time_str() -> str:
@@ -298,6 +252,18 @@ def _start_repl(
         if et == "tool_call_start":
             return reply, display_content, _tool_executing_message(event.tool_name, event.tool_args)
         if et == "tool_call_end":
+            if getattr(event, "tool_name", None) == "get_checklist":
+                # Refresh checklist after get_checklist tool
+                checklist_content = json.loads(history[-1].content or "{}")
+                if checklist_content.get("name"):
+                    active_checklist.name = checklist_content.get("name") + ".json"
+                cl_text = _get_session_checklist()
+                renderer.render_project(
+                    transcript,
+                    cl_text,
+                    agent_settings=agent_settings,
+                    show_input_space=False,
+                )
             return reply, display_content + _tool_done_message(event.tool_name), ""
         if et == "tool_call_error":
             return (
@@ -419,8 +385,7 @@ def _start_repl(
             if watcher:
                 watcher.stop()
             _sanitize_transcript(transcript)
-            cl_text = _get_session_checklist()
-            renderer.render_project(transcript, cl_text, agent_settings=agent_settings)
+            _render_current_screen(show_input_space=False)
             renderer.render_goodbye_screen()
             break
 
