@@ -293,7 +293,9 @@ class InteractiveSelect:
                         content.append(choice, style="white")
                 except Exception:
                     content.append(escape(choice), style="white")
-            content.append("\n")
+
+            # Add spacing between items (empty line)
+            content.append("\n\n")
 
         # Add hint with better styling
         content.append("\n")

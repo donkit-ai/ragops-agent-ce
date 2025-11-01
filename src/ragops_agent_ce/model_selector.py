@@ -129,7 +129,6 @@ def select_model_at_startup(
         # Build provider list with indicators
         choices = []
         provider_map = {}  # Map choice index to provider name
-        latest_index = None  # Index of latest selected provider
 
         # Provider emojis for visual appeal
         provider_emojis = {
@@ -141,8 +140,23 @@ def select_model_at_startup(
             "openrouter": "🌉",
         }
 
-        configured_count = 0
+        # Sort providers: latest first, then alphabetically by display name
+        sorted_providers = []
+        other_providers = []
+
         for provider, info in PROVIDERS.items():
+            if provider == latest_provider:
+                # Latest provider goes first
+                sorted_providers.insert(0, (provider, info))
+            else:
+                other_providers.append((provider, info))
+
+        # Sort other providers alphabetically by display name
+        other_providers.sort(key=lambda x: x[1]["display"])
+        sorted_providers.extend(other_providers)
+
+        configured_count = 0
+        for idx, (provider, info) in enumerate(sorted_providers):
             has_creds = check_provider_credentials(provider, env_path)
             if has_creds:
                 configured_count += 1
@@ -177,24 +191,21 @@ def select_model_at_startup(
             else:
                 choice_text.append("[Setup Required]", style="yellow on black")
 
-            # Newline for description
-            choice_text.append("\n   ", style="")
-            choice_text.append(info["description"], style="dim italic")
-
-            # Track latest selection index
+            # Mark latest selection
             if provider == latest_provider:
-                latest_index = len(choices)
-                choice_text.append("\n   ", style="")
-                choice_text.append("← Latest selection", style="bold cyan")
+                choice_text.append(" ", style="")
+                choice_text.append("← Last used", style="bold cyan")
 
             choices.append(str(choice_text))
-            provider_map[len(choices) - 1] = provider
+            provider_map[idx] = provider
 
         # Build title with configured count and visual styling
         title = f"🚀 Select LLM Model Provider · {configured_count}/{len(PROVIDERS)} Ready"
 
         console.print()
-        selected_choice = interactive_select(choices, title=title, default_index=latest_index)
+        # Default to first item (0) which is the latest selection if it exists
+        default_index = 0 if latest_provider else 0
+        selected_choice = interactive_select(choices, title=title, default_index=default_index)
 
         if selected_choice is None:
             return None
