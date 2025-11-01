@@ -130,16 +130,6 @@ def select_model_at_startup(
         choices = []
         provider_map = {}  # Map choice index to provider name
 
-        # Provider emojis for visual appeal
-        provider_emojis = {
-            "vertex": "🌐",
-            "openai": "🤖",
-            "azure_openai": "☁️",
-            "anthropic": "🎭",
-            "ollama": "🏠",
-            "openrouter": "🌉",
-        }
-
         # Sort providers: latest first, then alphabetically by display name
         sorted_providers = []
         other_providers = []
@@ -171,11 +161,7 @@ def select_model_at_startup(
                 choice_text.append("⚠", style="bold yellow")
 
             # Spacing
-            choice_text.append(" ", style="")
-
-            # Provider emoji
-            emoji = provider_emojis.get(provider, "🔧")
-            choice_text.append(emoji + " ", style="")
+            choice_text.append("  ", style="")
 
             # Add provider display name with better styling
             if has_creds:
