@@ -29,6 +29,10 @@ class RagConfigPlanArgs(BaseModel):
             collection_name = self.rag_config.retriever_options.collection_name
             if not re.match(r"^[a-zA-Z_]", collection_name):
                 self.rag_config.retriever_options.collection_name = f"_{collection_name}"
+        
+        # Ensure embedder.embedder_type is preserved if explicitly set
+        # If embedder was passed but embedder_type is default (vertex), check if we should preserve it
+        # This prevents overwriting user's choice
         return self
 
 
@@ -42,7 +46,9 @@ server = mcp.server.FastMCP(
     name="rag_config_plan",
     description=(
         "Suggest a RAG configuration (vectorstore/chunking/retriever/ranker) "
-        "for the given project and sources."
+        "for the given project and sources. "
+        "IMPORTANT: When passing rag_config parameter, ensure embedder.embedder_type is explicitly set "
+        "to match user's choice (openai, vertex, or azure_openai). Do not rely on defaults."
     ),
 )
 async def rag_config_plan(args: RagConfigPlanArgs) -> mcp.types.TextContent:

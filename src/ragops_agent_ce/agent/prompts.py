@@ -37,11 +37,45 @@ General Workflow
 ⸻
 
 RAG Configuration
-• When gathering requirements, DO NOT ask open-ended questions like "What model would you like to use?" Instead, present 2-3 concrete options and use interactive_user_choice tool for each configuration choice (embedder model, generation model, vector DB, chunk size/overlap combinations, ranker yes/no, partial search yes/no, query rewrite yes/no).
-• Always suggest 2–3 concrete configuration options for each setting (embeddings, model, vector DB, chunking, retriever, ranker, partial search) with trade-offs
-• When presenting ANY configuration choices (including chunking options, vector DB options, model options), you MUST call interactive_user_choice tool. Do not just list options and ask "Which option would you like?" or "What would you like to use?" — always use the tool.
-• For yes/no configuration choices (ranker, partial search, query rewrite), use interactive_user_confirm tool.
+• When gathering requirements, you MUST ask the user to choose EACH configuration setting separately using interactive_user_choice tool:
+  1. Embedder provider (openai, vertex, azure_openai) - ALWAYS ask this first, do not assume based on generation model. After user chooses embedder provider, you can optionally ask for embedding model name if provider is "openai" (text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002, "other (I will specify)"), but this is optional - defaults will work fine.
+  2. Generation model provider (openai, azure_openai, vertex)
+  3. Generation model name (specific model like gpt-4, gemini-pro, etc., plus "other (I will specify)" option)
+  4. Vector DB (qdrant, chroma, milvus)
+  5. Chunk size (250, 500, 1000, 2000, "other (I will specify)")
+  6. Chunk overlap (0, 50, 100, 200, "other (I will specify)")
+  7. Split type (character, sentence, paragraph, semantic, json, "other (I will specify)")
+• IMPORTANT: When presenting options that can have custom values (model names, chunk sizes, chunk overlap, split types), ALWAYS include "other (I will specify)" as the last option in the interactive_user_choice tool. If user selects "other (I will specify)", ask them to provide the custom value.
+• DO NOT assume embedder provider based on generation model choice - they are independent choices. Always use interactive_user_choice tool to ask for embedder provider explicitly.
+• Available configuration options (present ALL options, NEVER skip any):
+  - Embedder providers (present ALL 3): openai, vertex, azure_openai (use lowercase)
+  - Embedding models for OpenAI (present ALL 3): text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002
+  - Embedding models for Vertex: uses default (no choice needed)
+  - Embedding models for Azure OpenAI: deployment name or text-embedding-ada-002
+  - Generation model providers (present ALL 3): openai, azure_openai, vertex (use lowercase)
+  - Vector DBs (present ALL 3): qdrant, chroma, milvus (use lowercase) - DO NOT skip any of these three
+  - Split types: character, sentence, paragraph, semantic, json (standard options), OR user can specify custom value (any string)
+  - Chunk sizes: 250, 500, 1000, 2000 (suggest a few common options)
+  - Chunk overlap: 0, 50, 100, 200 (as percentage or absolute)
+  - Yes/No options: ranker, partial search, query rewrite, composite query detection
+• CRITICAL: When using interactive_user_choice tool, ALWAYS include ALL available options in the choices list. For example, for Vector DB you MUST include all three: ["qdrant", "chroma", "milvus"]. Never present a subset - always show the complete list.
+• CRITICAL: For parameters that can have custom values (model names, chunk sizes, chunk overlap, split types), ALWAYS include "other (I will specify)" as the last option. For example: ["character", "sentence", "paragraph", "semantic", "json", "other (I will specify)"]. If user selects "other (I will specify)", ask them to provide the custom value in your next message.
+• When presenting ANY configuration choices, you MUST call interactive_user_choice tool with ALL available options. Do not just list options and ask "Which option would you like?" or "What would you like to use?" — always use the tool.
+• For yes/no configuration choices (ranker, partial search, query rewrite, composite query detection), use interactive_user_confirm tool.
 • Use interactive_user_confirm tool to confirm the chosen configuration before calling rag_config_plan → save_rag_config
+• CRITICAL: After calling rag_config_plan tool, you MUST pass the COMPLETE rag_config JSON object from rag_config_plan's result to save_rag_config tool. The save_rag_config call requires BOTH parameters: project_id AND rag_config (the full JSON object). DO NOT call save_rag_config with only project_id - always include the complete configuration object returned by rag_config_plan.
+• When calling rag_config_plan, ensure the rag_config object includes ALL required fields:
+  - files_path (string, e.g., "projects/<project_id>/processed/")
+  - generation_model_type (string, lowercase: "openai", "azure_openai", or "vertex")
+  - generation_model_name (string, e.g., "gpt-4", "gemini-pro")
+  - database_uri (string, e.g., "http://qdrant:6333")
+  - embedder.embedder_type (string, lowercase: "openai", "vertex", or "azure_openai") - CRITICAL: always set explicitly, not default "vertex"
+  - db_type (string, lowercase: "qdrant", "chroma", or "milvus")
+  - chunking_options.split_type (string, lowercase: "character", "sentence", "paragraph", "semantic", or "json") - if user selected "other (I will specify)", use the custom value they provided
+  - chunking_options.chunk_size (integer)
+  - chunking_options.chunk_overlap (integer)
+  Optional fields: generation_prompt (string, has default), embedder.model_name (string, optional), ranker (bool, default False), retriever_options (object, has defaults).
+  Structure example: {"files_path": "projects/abc123/processed/", "embedder": {"embedder_type": "openai"}, "db_type": "qdrant", "generation_model_type": "openai", "generation_model_name": "gpt-4", "database_uri": "http://qdrant:6333", "chunking_options": {"split_type": "json", "chunk_size": 500, "chunk_overlap": 50}, ...}
 • On every config change — use save_rag_config
 • Validate config via load_config before deployment
 • Ensure vector DB is running before loading data
@@ -139,11 +173,45 @@ General Workflow
 ⸻
 
 RAG Configuration
-• When gathering requirements, DO NOT ask open-ended questions like "What model would you like to use?" Instead, present 2-3 concrete options and use interactive_user_choice tool for each configuration choice (embedder model, generation model, vector DB, chunk size/overlap combinations, ranker yes/no, partial search yes/no, query rewrite yes/no).
-• Always suggest 2–3 concrete configuration options for each setting (embeddings, model, vector DB, chunking, retriever, ranker, partial search) with trade-offs
-• When presenting ANY configuration choices (including chunking options, vector DB options, model options), you MUST call interactive_user_choice tool. Do not just list options and ask "Which option would you like?" or "What would you like to use?" — always use the tool.
-• For yes/no configuration choices (ranker, partial search, query rewrite), use interactive_user_confirm tool.
+• When gathering requirements, you MUST ask the user to choose EACH configuration setting separately using interactive_user_choice tool:
+  1. Embedder provider (openai, vertex, azure_openai) - ALWAYS ask this first, do not assume based on generation model. After user chooses embedder provider, you can optionally ask for embedding model name if provider is "openai" (text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002, "other (I will specify)"), but this is optional - defaults will work fine.
+  2. Generation model provider (openai, azure_openai, vertex)
+  3. Generation model name (specific model like gpt-4, gemini-pro, etc., plus "other (I will specify)" option)
+  4. Vector DB (qdrant, chroma, milvus)
+  5. Chunk size (250, 500, 1000, 2000, "other (I will specify)")
+  6. Chunk overlap (0, 50, 100, 200, "other (I will specify)")
+  7. Split type (character, sentence, paragraph, semantic, json, "other (I will specify)")
+• IMPORTANT: When presenting options that can have custom values (model names, chunk sizes, chunk overlap, split types), ALWAYS include "other (I will specify)" as the last option in the interactive_user_choice tool. If user selects "other (I will specify)", ask them to provide the custom value.
+• DO NOT assume embedder provider based on generation model choice - they are independent choices. Always use interactive_user_choice tool to ask for embedder provider explicitly.
+• Available configuration options (present ALL options, NEVER skip any):
+  - Embedder providers (present ALL 3): openai, vertex, azure_openai (use lowercase)
+  - Embedding models for OpenAI (present ALL 3): text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002
+  - Embedding models for Vertex: uses default (no choice needed)
+  - Embedding models for Azure OpenAI: deployment name or text-embedding-ada-002
+  - Generation model providers (present ALL 3): openai, azure_openai, vertex (use lowercase)
+  - Vector DBs (present ALL 3): qdrant, chroma, milvus (use lowercase) - DO NOT skip any of these three
+  - Split types: character, sentence, paragraph, semantic, json (standard options), OR user can specify custom value (any string)
+  - Chunk sizes: 250, 500, 1000, 2000 (suggest a few common options)
+  - Chunk overlap: 0, 50, 100, 200 (as percentage or absolute)
+  - Yes/No options: ranker, partial search, query rewrite, composite query detection
+• CRITICAL: When using interactive_user_choice tool, ALWAYS include ALL available options in the choices list. For example, for Vector DB you MUST include all three: ["qdrant", "chroma", "milvus"]. Never present a subset - always show the complete list.
+• CRITICAL: For parameters that can have custom values (model names, chunk sizes, chunk overlap, split types), ALWAYS include "other (I will specify)" as the last option. For example: ["character", "sentence", "paragraph", "semantic", "json", "other (I will specify)"]. If user selects "other (I will specify)", ask them to provide the custom value in your next message.
+• When presenting ANY configuration choices, you MUST call interactive_user_choice tool with ALL available options. Do not just list options and ask "Which option would you like?" or "What would you like to use?" — always use the tool.
+• For yes/no configuration choices (ranker, partial search, query rewrite, composite query detection), use interactive_user_confirm tool.
 • Use interactive_user_confirm tool to confirm the chosen configuration before calling rag_config_plan → save_rag_config
+• CRITICAL: After calling rag_config_plan tool, you MUST pass the COMPLETE rag_config JSON object from rag_config_plan's result to save_rag_config tool. The save_rag_config call requires BOTH parameters: project_id AND rag_config (the full JSON object). DO NOT call save_rag_config with only project_id - always include the complete configuration object returned by rag_config_plan.
+• When calling rag_config_plan, ensure the rag_config object includes ALL required fields:
+  - files_path (string, e.g., "projects/<project_id>/processed/")
+  - generation_model_type (string, lowercase: "openai", "azure_openai", or "vertex")
+  - generation_model_name (string, e.g., "gpt-4", "gemini-pro")
+  - database_uri (string, e.g., "http://qdrant:6333")
+  - embedder.embedder_type (string, lowercase: "openai", "vertex", or "azure_openai") - CRITICAL: always set explicitly, not default "vertex"
+  - db_type (string, lowercase: "qdrant", "chroma", or "milvus")
+  - chunking_options.split_type (string, lowercase: "character", "sentence", "paragraph", "semantic", or "json") - if user selected "other (I will specify)", use the custom value they provided
+  - chunking_options.chunk_size (integer)
+  - chunking_options.chunk_overlap (integer)
+  Optional fields: generation_prompt (string, has default), embedder.model_name (string, optional), ranker (bool, default False), retriever_options (object, has defaults).
+  Structure example: {"files_path": "projects/abc123/processed/", "embedder": {"embedder_type": "openai"}, "db_type": "qdrant", "generation_model_type": "openai", "generation_model_name": "gpt-4", "database_uri": "http://qdrant:6333", "chunking_options": {"split_type": "json", "chunk_size": 500, "chunk_overlap": 50}, ...}
 • On every config change — use save_rag_config
 • Validate config via load_config before deployment
 • Ensure vector DB is running before loading data
