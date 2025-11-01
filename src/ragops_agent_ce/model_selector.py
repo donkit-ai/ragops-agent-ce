@@ -165,7 +165,7 @@ def select_model_at_startup(
 
             # Add provider display name with better styling
             if has_creds:
-                choice_text.append(info["display"], style="bold white")
+                choice_text.append(info["display"], style="bold green")
             else:
                 choice_text.append(info["display"], style="white")
 
@@ -173,9 +173,9 @@ def select_model_at_startup(
 
             # Status badge
             if has_creds:
-                choice_text.append("[Ready]", style="green on black")
+                choice_text.append("[Ready]", style="bold green")
             else:
-                choice_text.append("[Setup Required]", style="yellow on black")
+                choice_text.append("[Setup Required]", style="yellow")
 
             # Mark latest selection
             if provider == latest_provider:
