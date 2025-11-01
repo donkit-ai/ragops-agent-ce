@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
+from rich.style import Style
 
 if TYPE_CHECKING:
     import termios
@@ -223,37 +224,65 @@ class InteractiveInputBox:
 class InteractiveSelect:
     """Handles interactive selection menu with arrow key navigation."""
 
-    def __init__(self, choices: list[str], title: str = "Select an option"):
+    def __init__(
+        self,
+        choices: list[str],
+        title: str = "Select an option",
+        default_index: int | None = None,
+    ):
         self.choices = choices
         self.title = title
-        self.selected_index = 0
+        self.selected_index = (
+            default_index
+            if default_index is not None and 0 <= default_index < len(choices)
+            else 0
+        )
 
     def _create_select_panel(self, selected_idx: int) -> Panel:
         """Create selection panel with choices and highlighted selection."""
         content = Text()
 
         for idx, choice in enumerate(self.choices):
-            if idx == selected_idx:
-                # Highlighted selection
-                content.append("❯ ", style="bold cyan")
-                content.append(choice, style="bold cyan on black")
+            is_selected = idx == selected_idx
+
+            indicator = "❯ " if is_selected else "  "
+            indicator_style = "bold cyan" if is_selected else "dim"
+            content.append(indicator, style=indicator_style)
+
+            try:
+                choice_text = Text.from_markup(choice)
+            except Exception:
+                choice_text = Text(choice)
+
+            if is_selected:
+                highlighted = choice_text.copy()
+                highlighted.stylize(Style(bold=True))
+                highlighted.stylize(Style(bgcolor="grey11"), 0, len(highlighted))
+                content.append_text(highlighted)
             else:
-                content.append("  ", style="dim")
-                content.append(choice, style="white")
+                content.append_text(choice_text)
+
             content.append("\n")
 
-        # Add hint
-        content.append("\n", style="dim")
-        content.append("↑/↓: Navigate  ", style="yellow dim")
-        content.append("Enter: Select  ", style="green dim")
-        content.append("Ctrl+C: Cancel", style="red dim")
+        # Add hint with subtle separator
+        content.append("\n", style="")
+        content.append("─" * 40, style="dim")
+        content.append("\n")
+        content.append("  ", style="")
+        content.append("↑/↓", style="bold yellow")
+        content.append(" Navigate  │  ", style="dim")
+        content.append("Enter", style="bold green")
+        content.append(" Select  │  ", style="dim")
+        content.append("Ctrl+C", style="bold red")
+        content.append(" Cancel", style="dim")
 
         return Panel(
             content,
-            title=f"[bold]{self.title}[/bold]",
+            title=f"[bold cyan]{self.title}[/bold cyan]",
             title_align="left",
             border_style="cyan",
             expand=True,
+            padding=(1, 2),
         )
 
     def get_selection(self) -> str | None:
@@ -273,7 +302,8 @@ class InteractiveSelect:
         if not sys.stdin.isatty() and not MSVCRT_AVAILABLE:
             raise ImportError("Not running in a terminal")
 
-        self.selected_index = 0
+        # Use the initial selected_index from __init__
+        initial_index = self.selected_index
 
         # Setup terminal for Unix
         old_settings = None
@@ -283,7 +313,7 @@ class InteractiveSelect:
             tty.setcbreak(fd)
 
         with Live(
-            self._create_select_panel(0),
+            self._create_select_panel(initial_index),
             console=console,
             refresh_per_second=20,
         ) as live:
@@ -333,10 +363,19 @@ class InteractiveSelect:
 
     def _fallback_select(self) -> str | None:
         """Fallback to numbered selection for incompatible terminals."""
+        from rich.markup import escape
+
         console.print()
         console.print(f"[bold]{self.title}[/bold]")
         for idx, choice in enumerate(self.choices, 1):
-            console.print(f"  {idx}. {choice}")
+            # Try to render Rich markup, fallback to plain text
+            try:
+                from rich.text import Text
+                choice_text = Text.from_markup(choice)
+                console.print(f"  {idx}. ", end="")
+                console.print(choice_text)
+            except Exception:
+                console.print(f"  {idx}. {escape(choice)}")
         console.print()
 
         while True:
@@ -518,23 +557,28 @@ def get_user_input() -> str:
         raise
 
 
-def interactive_select(choices: list[str], title: str = "Select an option") -> str | None:
+def interactive_select(
+    choices: list[str],
+    title: str = "Select an option",
+    default_index: int | None = None,
+) -> str | None:
     """
     Show interactive selection menu with arrow key navigation.
 
     Args:
         choices: List of options to choose from
         title: Title for the selection menu
+        default_index: Optional initial selection index
 
     Returns:
         Selected choice string or None if cancelled
     """
     if INTERACTIVE_AVAILABLE:
-        selector = InteractiveSelect(choices, title)
+        selector = InteractiveSelect(choices, title, default_index=default_index)
         return selector.get_selection()
 
     # Fallback for incompatible terminals
-    selector = InteractiveSelect(choices, title)
+    selector = InteractiveSelect(choices, title, default_index=default_index)
     return selector._fallback_select()
 
 
