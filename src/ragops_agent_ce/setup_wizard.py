@@ -15,6 +15,7 @@ from rich.prompt import Confirm
 from rich.prompt import Prompt
 from rich.text import Text
 
+from ragops_agent_ce.credential_checker import check_provider_credentials
 from ragops_agent_ce.interactive_input import interactive_confirm
 from ragops_agent_ce.interactive_input import interactive_select
 
@@ -489,23 +490,8 @@ def check_needs_setup(env_path: Path | None = None) -> bool:
         if not provider:
             return True
 
-        # Check provider-specific credentials
-        if provider == "vertex" and not config.get("RAGOPS_VERTEX_CREDENTIALS"):
-            return True
-        if provider == "openai" and not config.get("RAGOPS_OPENAI_API_KEY"):
-            return True
-        if provider == "azure_openai":
-            required = [
-                "RAGOPS_AZURE_OPENAI_API_KEY",
-                "RAGOPS_AZURE_OPENAI_ENDPOINT",
-                "RAGOPS_AZURE_OPENAI_DEPLOYMENT",
-            ]
-            if not all(config.get(k) for k in required):
-                return True
-        if provider == "anthropic" and not config.get("RAGOPS_ANTHROPIC_API_KEY"):
-            return True
-
-        return False
+        # Use shared credential checking logic
+        return not check_provider_credentials(provider, env_path)
     except Exception:
         return True
 
