@@ -34,7 +34,7 @@ mkdir ~/ragops-workspace
 cd ~/ragops-workspace
 
 # Initialize Poetry project
-poetry init --no-interaction --python="^3.12"
+poetry init --no-interaction --python=">=3.12.0 <3.14.0"
 
 # Add donkit-ragops-ce
 poetry add donkit-ragops-ce
@@ -96,7 +96,7 @@ Or create a `.env` file manually in your working directory:
 
 ```bash
 # Vertex AI (Google Cloud)
-RAGOPS_LLM_PROVIDER=vertexai
+RAGOPS_LLM_PROVIDER=vertex
 RAGOPS_VERTEX_CREDENTIALS=/path/to/service-account-key.json
 
 # OpenAI
