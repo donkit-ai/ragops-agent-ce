@@ -261,17 +261,18 @@ class InteractiveSelect:
                                 base_style = str(segment.style)
                                 # Apply highlight with subtle background
                                 if "green" in base_style or "bold green" in base_style:
-                                    content.append(segment.text, style="bold green on #004400")
+                                    # Green text (ready providers) - bright green on dark green bg
+                                    content.append(segment.text, style="bold green on #003300")
                                 elif "yellow" in base_style:
-                                    content.append(segment.text, style="bold yellow on #444400")
+                                    # Yellow text (not ready) - yellow on dark yellow bg
+                                    content.append(segment.text, style="bold yellow on #443300")
                                 elif "cyan" in base_style:
-                                    content.append(segment.text, style="bold cyan on #004444")
+                                    # Cyan text (last used marker) - cyan on dark cyan bg
+                                    content.append(segment.text, style="bold cyan on #003344")
                                 elif "dim" in base_style or "italic" in base_style:
                                     content.append(segment.text, style="dim on #222222")
-                                elif "on black" in base_style:
-                                    # Badge style - enhance with brighter background
-                                    content.append(segment.text, segment.style)
                                 else:
+                                    # Default white text
                                     content.append(segment.text, style="bold white on #222222")
                             else:
                                 content.append(segment.text, style="bold white on #222222")
