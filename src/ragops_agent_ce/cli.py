@@ -59,6 +59,8 @@ from .logging_config import setup_logging
 from .mcp.client import MCPClient
 from .prints import RAGOPS_LOGO_ART
 from .prints import RAGOPS_LOGO_TEXT
+from .model_selector import save_model_selection
+from .model_selector import select_model_at_startup
 from .setup_wizard import run_setup_if_needed
 
 app = typer.Typer(
@@ -114,9 +116,24 @@ def main(
         if setup:
             raise typer.Exit(code=0)
 
+        # Model selection at startup (mandatory)
+        # Only skip if provider is explicitly provided via CLI flag
+        if provider is None:
+            model_selection = select_model_at_startup()
+            if model_selection is None:
+                console.print("[red]Model selection cancelled. Exiting.[/red]")
+                raise typer.Exit(code=1)
+            provider, model_from_selection = model_selection
+            # Override model from selection if not provided via CLI
+            if model is None:
+                model = model_from_selection
+        else:
+            # Provider provided via CLI, save it to KV database as latest
+            save_model_selection(provider, model)
+
         _start_repl(
             system=system or VERTEX_SYSTEM_PROMPT
-            if provider == "vertexai"
+            if provider == "vertex" or provider == "vertexai"
             else OPENAI_SYSTEM_PROMPT,
             model=model,
             provider=provider,
@@ -189,7 +206,14 @@ def _start_repl(
     if provider:
         os.environ.setdefault("RAGOPS_LLM_PROVIDER", provider)
         settings = settings.model_copy(update={"llm_provider": provider})
-    prov = get_provider(settings)
+    
+    # Try to get provider and validate credentials
+    try:
+        prov = get_provider(settings, llm_provider=provider)
+    except (ValueError, FileNotFoundError, json.JSONDecodeError) as e:
+        console.print(f"[red]Error initializing provider '{provider}':[/red] {e}")
+        console.print("[yellow]Please ensure credentials are configured correctly.[/yellow]")
+        raise typer.Exit(code=1)
 
     tools = [] if mcp_only else default_tools()
     mcp_clients = []
