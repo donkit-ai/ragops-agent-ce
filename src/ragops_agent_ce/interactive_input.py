@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
+from rich.style import Style
 
 if TYPE_CHECKING:
     import termios
@@ -239,68 +240,33 @@ class InteractiveSelect:
 
     def _create_select_panel(self, selected_idx: int) -> Panel:
         """Create selection panel with choices and highlighted selection."""
-        from rich.markup import escape
-
         content = Text()
 
         for idx, choice in enumerate(self.choices):
-            if idx == selected_idx:
-                # Highlighted selection with better visual indicator
-                content.append("▶ ", style="bold cyan")
-                # Parse Rich markup from choice string if present
-                try:
-                    if "[" in choice and "]" in choice:
-                        # Create a temporary Text object to parse markup
-                        temp_text = Text.from_markup(choice)
-                        # Apply highlight styling while preserving original styles
-                        for segment in temp_text:
-                            # Combine original style with highlight
-                            # Preserve colors but add cyan background for visibility
-                            if segment.style:
-                                # Try to extract color from original style
-                                base_style = str(segment.style)
-                                # Apply highlight with subtle background
-                                if "green" in base_style or "bold green" in base_style:
-                                    # Green text (ready providers) - bright green on dark green bg
-                                    content.append(segment.text, style="bold green on #003300")
-                                elif "yellow" in base_style:
-                                    # Yellow text (not ready) - yellow on dark yellow bg
-                                    content.append(segment.text, style="bold yellow on #443300")
-                                elif "cyan" in base_style:
-                                    # Cyan text (last used marker) - cyan on dark cyan bg
-                                    content.append(segment.text, style="bold cyan on #003344")
-                                elif "dim" in base_style or "italic" in base_style:
-                                    content.append(segment.text, style="dim on #222222")
-                                else:
-                                    # Default white text
-                                    content.append(segment.text, style="bold white on #222222")
-                            else:
-                                content.append(segment.text, style="bold white on #222222")
-                    else:
-                        content.append(choice, style="bold white on #222222")
-                except Exception:
-                    # Fallback if markup parsing fails
-                    content.append(escape(choice), style="bold white on #222222")
+            is_selected = idx == selected_idx
+
+            indicator = "❯ " if is_selected else "  "
+            indicator_style = "bold cyan" if is_selected else "dim"
+            content.append(indicator, style=indicator_style)
+
+            try:
+                choice_text = Text.from_markup(choice)
+            except Exception:
+                choice_text = Text(choice)
+
+            if is_selected:
+                highlighted = choice_text.copy()
+                highlighted.stylize(Style(bold=True))
+                highlighted.stylize(Style(bgcolor="grey11"), 0, len(highlighted))
+                content.append_text(highlighted)
             else:
-                content.append("  ", style="dim")
-                # Parse Rich markup for non-selected items - preserve original styles
-                try:
-                    if "[" in choice and "]" in choice:
-                        temp_text = Text.from_markup(choice)
-                        for segment in temp_text:
-                            # Preserve original styling from markup
-                            content.append(segment.text, style=segment.style or "white")
-                    else:
-                        content.append(choice, style="white")
-                except Exception:
-                    content.append(escape(choice), style="white")
+                content.append_text(choice_text)
 
-            # Add spacing between items (empty line)
-            content.append("\n\n")
+            content.append("\n")
 
-        # Add hint with better styling
-        content.append("\n")
-        content.append("─" * 60, style="dim")
+        # Add hint with subtle separator
+        content.append("\n", style="")
+        content.append("─" * 40, style="dim")
         content.append("\n")
         content.append("  ", style="")
         content.append("↑/↓", style="bold yellow")

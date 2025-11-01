@@ -36,10 +36,6 @@ PROVIDERS = {
         "display": "Azure OpenAI",
         "description": "OpenAI models via Azure",
     },
-    "anthropic": {
-        "display": "Anthropic Claude",
-        "description": "Claude models (coming soon)",
-    },
     "ollama": {
         "display": "Ollama (Local)",
         "description": "Local LLM server (OpenAI-compatible)",
@@ -182,7 +178,7 @@ def select_model_at_startup(
                 choice_text.append(" ", style="")
                 choice_text.append("← Last used", style="bold cyan")
 
-            choices.append(str(choice_text))
+            choices.append(choice_text.markup)
             provider_map[idx] = provider
 
         # Build title with configured count and visual styling
@@ -293,4 +289,3 @@ def select_model_at_startup(
 
     # Should not reach here, but added for safety
     return None
-

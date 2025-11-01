@@ -80,7 +80,7 @@ class SetupWizard:
             "Vertex AI (Recommended), OpenAI, Azure OpenAI, Ollama, OpenRouter\n",
             style="green",
         )
-        welcome_text.append("Other providers (Anthropic) are coming soon!", style="dim italic")
+        welcome_text.append("More providers are coming soon!", style="dim italic")
 
         console.print(Panel(welcome_text, title="🚀 Setup", border_style="cyan"))
         console.print()
@@ -109,18 +109,12 @@ class SetupWizard:
                 "available": True,
             },
             "4": {
-                "name": "anthropic",
-                "display": "Anthropic Claude",
-                "description": "Coming soon",
-                "available": False,
-            },
-            "5": {
                 "name": "ollama",
                 "display": "Ollama (Local)",
                 "description": "Local LLM server (OpenAI-compatible)",
                 "available": True,
             },
-            "6": {
+            "5": {
                 "name": "openrouter",
                 "display": "OpenRouter",
                 "description": "Access 100+ models via OpenRouter API",
