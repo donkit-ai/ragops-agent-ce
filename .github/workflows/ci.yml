@@ -33,11 +33,15 @@ jobs:
     name: Publish to public PyPI
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
     env:
       PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -50,11 +54,40 @@ jobs:
           poetry config virtualenvs.create false
           poetry config pypi-token.pypi "$PYPI_TOKEN"
 
-      - name: Build and publish to PyPI.org
+      - name: Bump version and sync
         run: |
+          set -e
+          # Increase patch version (0.3.1 -> 0.3.2)
+          poetry version patch
+          NEW_VERSION=$(poetry version --short)
+          echo "New version: $NEW_VERSION"
+          
+          # Update version in __init__.py to match pyproject.toml
+          sed -i "s/^__version__ = \".*\"/__version__ = \"$NEW_VERSION\"/" src/ragops_agent_ce/__init__.py
+          echo "✅ Version synced: $NEW_VERSION"
+
+      - name: Build and publish to PyPI.org
+        id: publish
+        run: |
+          set -e
           echo "Building package ragops-agent-ce"
           poetry build
           echo "Publishing to public PyPI.org"
           poetry publish
           echo "✅ Successfully published to PyPI!"
           poetry version --short
+
+      - name: Commit version bump
+        if: steps.publish.outcome == 'success'
+        run: |
+          set -e
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add pyproject.toml src/ragops_agent_ce/__init__.py
+          if git diff --staged --quiet; then
+            echo "No version changes to commit"
+          else
+            VERSION=$(poetry version --short)
+            git commit -m "chore: bump version to $VERSION [skip ci]"
+            git push
+          fi
