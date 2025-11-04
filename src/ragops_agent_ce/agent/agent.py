@@ -22,8 +22,6 @@ from .project_tools import tool_save_rag_config
 from .tools import AgentTool
 from .tools import tool_db_get
 from .tools import tool_grep
-from .tools import tool_interactive_user_choice
-from .tools import tool_interactive_user_confirm
 from .tools import tool_list_directory
 from .tools import tool_read_file
 from .tools import tool_time_now
@@ -47,8 +45,6 @@ def default_tools() -> list[AgentTool]:
         tool_list_directory(),
         tool_read_file(),
         tool_grep(),
-        tool_interactive_user_choice(),
-        tool_interactive_user_confirm(),
         tool_create_project(),
         tool_get_project(),
         tool_list_projects(),
