@@ -256,33 +256,9 @@ def _start_repl(
         if et == "tool_call_end":
             if getattr(event, "tool_name", None) == "get_checklist":
                 # Refresh checklist after get_checklist tool
-                # Safely parse tool result - it might be JSON or plain text error message
-                try:
-                    tool_result = history[-1].content or "{}"
-                    checklist_content = json.loads(tool_result)
-                    if checklist_content.get("name"):
-                        active_checklist.name = checklist_content.get("name") + ".json"
-                except (json.JSONDecodeError, ValueError):
-                    # Tool returned plain text (e.g., "Checklist '...' not found."), not JSON
-                    # Skip checklist update in this case - checklist doesn't exist yet
-                    pass
-                cl_text = _get_session_checklist()
-                renderer.render_project(
-                    transcript,
-                    cl_text,
-                    agent_settings=agent_settings,
-                    show_input_space=False,
-                )
-            if getattr(event, "tool_name", None) in ("create_checklist", "update_checklist_item"):
-                # Refresh checklist after create/update operations
-                try:
-                    tool_result = history[-1].content or "{}"
-                    checklist_content = json.loads(tool_result)
-                    if checklist_content.get("name"):
-                        active_checklist.name = checklist_content.get("name") + ".json"
-                except (json.JSONDecodeError, ValueError):
-                    # Tool returned plain text error, skip checklist update
-                    pass
+                checklist_content = json.loads(history[-1].content or "{}")
+                if checklist_content.get("name"):
+                    active_checklist.name = checklist_content.get("name") + ".json"
                 cl_text = _get_session_checklist()
                 renderer.render_project(
                     transcript,

@@ -15,9 +15,6 @@ from rich.prompt import Confirm
 from rich.prompt import Prompt
 from rich.text import Text
 
-from ragops_agent_ce.interactive_input import interactive_confirm
-from ragops_agent_ce.interactive_input import interactive_select
-
 console = Console()
 
 
@@ -127,31 +124,21 @@ class SetupWizard:
             },
         }
 
-        # Build list of available choices for interactive selection
-        available_providers = [
-            (key, info) for key, info in providers.items() if info["available"]
-        ]
-        choices = [
-            f"{info['display']} - {info['description']}"
-            for key, info in available_providers
-        ]
+        for key, info in providers.items():
+            if info["available"]:
+                console.print(f"  {key}. [bold]{info['display']}[/bold] - {info['description']}")
+            else:
+                console.print(f"  {key}. [dim]{info['display']} - {info['description']}[/dim]")
 
-        # Use interactive selection
-        selected = interactive_select(
-            choices=choices,
-            title="Choose your LLM provider"
+        console.print()
+        choice = Prompt.ask(
+            "Select provider",
+            choices=[k for k, v in providers.items() if v["available"]],
+            default="1",
         )
 
-        if selected is None:
-            console.print("[red]Setup cancelled[/red]")
-            return None
-
-        # Find the selected provider by matching the choice
-        selected_idx = choices.index(selected)
-        provider_key = available_providers[selected_idx][0]
-        provider = providers[provider_key]["name"]
-
-        console.print(f"\n✓ Selected: [green]{providers[provider_key]['display']}[/green]\n")
+        provider = providers[choice]["name"]
+        console.print(f"✓ Selected: [green]{providers[choice]['display']}[/green]\n")
         return provider
 
     def _configure_provider(self, provider: str) -> bool:
@@ -220,7 +207,7 @@ class SetupWizard:
 
         # Optional model name
         console.print()
-        use_custom_model = interactive_confirm("Specify model name?", default=False)
+        use_custom_model = Confirm.ask("Specify model name?", default=False)
 
         if use_custom_model:
             model = Prompt.ask("Enter model name", default="gpt-4o-mini")
@@ -229,7 +216,7 @@ class SetupWizard:
 
         # Optional embedding model
         console.print()
-        use_embedding_model = interactive_confirm("Specify embedding model?", default=False)
+        use_embedding_model = Confirm.ask("Specify embedding model?", default=False)
 
         if use_embedding_model:
             embedding_model = Prompt.ask(
@@ -240,7 +227,7 @@ class SetupWizard:
 
         # Optional custom base URL
         console.print()
-        use_custom_url = interactive_confirm(
+        use_custom_url = Confirm.ask(
             "Use custom base URL? (for OpenAI-compatible providers)", default=False
         )
 
@@ -251,7 +238,7 @@ class SetupWizard:
                 console.print(
                     "[yellow]⚠ Base URL should start with 'http://' or 'https://'[/yellow]"
                 )
-                retry = interactive_confirm("Continue anyway?", default=False)
+                retry = Confirm.ask("Continue anyway?", default=False)
                 if not retry:
                     return self._configure_openai()
 
@@ -386,18 +373,14 @@ class SetupWizard:
         console.print("[bold]Step 3:[/bold] Optional settings\n")
 
         # Log level
-        configure_log = interactive_confirm("Configure log level?", default=False)
-        if configure_log:
-            # Use interactive select for log level
-            log_level = interactive_select(
+        if Confirm.ask("Configure log level?", default=False):
+            log_level = Prompt.ask(
+                "Log level",
                 choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-                title="Select log level"
+                default="ERROR",
             )
-            if log_level:
-                self.config["RAGOPS_LOG_LEVEL"] = log_level
-                console.print(f"\n✓ Log level: [green]{log_level}[/green]\n")
-            else:
-                console.print("[dim]Using default log level: ERROR[/dim]\n")
+            self.config["RAGOPS_LOG_LEVEL"] = log_level
+            console.print(f"✓ Log level: [green]{log_level}[/green]\n")
         else:
             console.print("[dim]Using default log level: ERROR[/dim]\n")
 
@@ -436,8 +419,7 @@ class SetupWizard:
         # Check if .env already exists
         if self.env_path.exists():
             console.print(f"[yellow]⚠ File already exists:[/yellow] {self.env_path}")
-            overwrite = interactive_confirm("Overwrite?", default=False)
-            if not overwrite:
+            if not Confirm.ask("Overwrite?", default=False):
                 console.print("[red]Setup cancelled.[/red]")
                 return False
 
