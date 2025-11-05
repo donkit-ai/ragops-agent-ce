@@ -5,10 +5,9 @@ from typing import List
 from typing import Literal
 from typing import Optional
 
-import mcp
+from fastmcp import FastMCP
 from pydantic import BaseModel
 from pydantic import Field
-from pydantic import validate_call
 
 
 class ChecklistItem(BaseModel):
@@ -37,9 +36,8 @@ class Checklist(BaseModel):
     )
 
 
-server = mcp.server.FastMCP(
+server = FastMCP(
     "rag-checklist",
-    log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
 
 
@@ -94,16 +92,14 @@ class UpdateChecklistItemArgs(BaseModel):
         "If checklist already exists, returns the existing one."
     ),
 )
-@validate_call
-async def create_checklist(args: CreateChecklistArgs) -> mcp.types.TextContent:
+async def create_checklist(args: CreateChecklistArgs) -> str:
     # Check if checklist already exists
     existing_checklist = _load_checklist(args.name)
     if existing_checklist is not None:
-        return mcp.types.TextContent(
-            type="text",
-            text=f"Checklist '{args.name}' already exists. "
+        return (
+            f"Checklist '{args.name}' already exists. "
             f"Returning existing checklist with {len(existing_checklist.items)} items.\n\n"
-            + existing_checklist.model_dump_json(indent=2),
+            + existing_checklist.model_dump_json(indent=2)
         )
 
     # Convert simple string items to ChecklistItem objects
@@ -112,11 +108,9 @@ async def create_checklist(args: CreateChecklistArgs) -> mcp.types.TextContent:
     ]
     checklist = Checklist(name=args.name, items=checklist_items)
     output_path = _save_checklist(checklist)
-    return mcp.types.TextContent(
-        type="text",
-        text=f"Checklist '{args.name}' created with "
-        f"{len(args.items)} items. Saved to {output_path}\n\n"
-        + checklist.model_dump_json(indent=2),
+    return (
+        f"Checklist '{args.name}' created with "
+        f"{len(args.items)} items. Saved to {output_path}\n\n" + checklist.model_dump_json(indent=2)
     )
 
 
@@ -124,25 +118,23 @@ async def create_checklist(args: CreateChecklistArgs) -> mcp.types.TextContent:
     name="get_checklist",
     description="Retrieves the current state of a checklist by its name as a JSON string.",
 )
-@validate_call
-async def get_checklist(args: GetChecklistArgs) -> mcp.types.TextContent:
+async def get_checklist(args: GetChecklistArgs) -> str:
     checklist = _load_checklist(args.name)
     if checklist is None:
-        return mcp.types.TextContent(type="text", text=f"Checklist '{args.name}' not found.")
+        return f"Checklist '{args.name}' not found."
 
     # Return the full checklist as a JSON string to provide all details, including IDs
-    return mcp.types.TextContent(type="text", text=checklist.model_dump_json(indent=2))
+    return checklist.model_dump_json(indent=2)
 
 
 @server.tool(
     name="update_checklist_item",
     description="Updates the status of a specific item in a checklist.",
 )
-@validate_call
-async def update_checklist_item(args: UpdateChecklistItemArgs) -> mcp.types.TextContent:
+async def update_checklist_item(args: UpdateChecklistItemArgs) -> str:
     checklist = _load_checklist(args.name)
     if checklist is None:
-        return mcp.types.TextContent(type="text", text=f"Checklist '{args.name}' not found.")
+        return f"Checklist '{args.name}' not found."
 
     # Find item index
     item_index = None
@@ -152,35 +144,33 @@ async def update_checklist_item(args: UpdateChecklistItemArgs) -> mcp.types.Text
             break
 
     if item_index is None:
-        return mcp.types.TextContent(
-            type="text", text=f"Item '{args.item_id}' not found in checklist '{args.name}'."
-        )
+        return f"Item '{args.item_id}' not found in checklist '{args.name}'."
 
     # Validate sequential execution: can't start new item if previous ones aren't completed
     if args.status == "in_progress" and item_index > 0:
         for prev_idx in range(item_index):
             prev_item = checklist.items[prev_idx]
             if prev_item.status != "completed":
-                return mcp.types.TextContent(
-                    type="text",
-                    text=f"Cannot start item '{args.item_id}': "
+                return (
+                    f"Cannot start item '{args.item_id}': "
                     f"Previous item '{prev_item.id}' ({prev_item.description}) "
                     f"is not completed (status: {prev_item.status}). "
-                    f"Please complete previous items first.",
+                    f"Please complete previous items first."
                 )
 
     # Update status
     checklist.items[item_index].status = args.status
 
     _save_checklist(checklist)
-    return mcp.types.TextContent(
-        type="text",
-        text=f"Updated item '{args.item_id}' in checklist '{args.name}' to status '{args.status}'.",
-    )
+    return f"Updated item '{args.item_id}' in checklist '{args.name}' to status '{args.status}'."
 
 
 def main() -> None:
-    server.run(transport="stdio")
+    server.run(
+        transport="stdio",
+        log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
+        show_banner=False,
+    )
 
 
 if __name__ == "__main__":

@@ -22,12 +22,12 @@ def _project_key(project_id: str) -> str:
 
 def _deep_update(base: dict[str, Any], update: dict[str, Any]) -> None:
     """Recursively update base dict with values from update dict.
-    
+
     Examples:
         base = {"a": {"b": 1}, "c": 2}
         update = {"a": {"b": 3}}
         Result: {"a": {"b": 3}, "c": 2}  # Only "b" updated, "c" preserved
-        
+
         base = {"embedder": {"embedder_type": "vertex"}}
         update = {"embedder": {"embedder_type": "openai"}}
         Result: {"embedder": {"embedder_type": "openai"}}  # embedder_type updated
@@ -206,7 +206,7 @@ def tool_save_rag_config() -> AgentTool:
     def handler(payload: dict[str, Any]) -> str:
         project_id = payload.get("project_id")
         rag_config_update = payload.get("rag_config")
-        
+
         # Validate required parameters FIRST
         if not project_id:
             return "Error: project_id is required."
@@ -217,7 +217,7 @@ def tool_save_rag_config() -> AgentTool:
                 "or (2) partial updates like {'embedder': {'embedder_type': 'openai'}}. "
                 "If passing partial updates, existing config will be merged."
             )
-        
+
         # Validate that rag_config is a dict/object
         if not isinstance(rag_config_update, dict):
             return (
@@ -234,11 +234,16 @@ def tool_save_rag_config() -> AgentTool:
 
             current_state = json.loads(current_state_raw)
             existing_config = current_state.get("configuration")
-            
+
             # Check if this looks like a complete config (has all required fields)
-            required_fields = {"files_path", "generation_model_type", "generation_model_name", "database_uri"}
+            required_fields = {
+                "files_path",
+                "generation_model_type",
+                "generation_model_name",
+                "database_uri",
+            }
             has_all_required = all(field in rag_config_update for field in required_fields)
-            
+
             # If no existing config, use update as-is (must be complete)
             if existing_config is None:
                 try:
@@ -264,7 +269,7 @@ def tool_save_rag_config() -> AgentTool:
                 # Partial update - merge with existing config
                 merged_config = json.loads(json.dumps(existing_config))  # Deep copy via JSON
                 _deep_update(merged_config, rag_config_update)
-                
+
                 # Validate merged config
                 try:
                     RagConfig.model_validate(merged_config, extra="forbid")

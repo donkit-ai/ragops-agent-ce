@@ -27,7 +27,15 @@ jobs:
           poetry install
 
       - name: Run pytest
-        run: poetry run pytest
+        run: |
+          set +e
+          poetry run pytest -q
+          rc=$?
+          if [ "$rc" -eq 5 ]; then
+            echo "No tests collected. Skipping failure."
+            exit 0
+          fi
+          exit $rc
 
   publish:
     name: Publish to public PyPI

@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
-from rich.text import Text
 from rich.style import Style
+from rich.text import Text
 
 if TYPE_CHECKING:
     import termios
@@ -233,9 +233,7 @@ class InteractiveSelect:
         self.choices = choices
         self.title = title
         self.selected_index = (
-            default_index
-            if default_index is not None and 0 <= default_index < len(choices)
-            else 0
+            default_index if default_index is not None and 0 <= default_index < len(choices) else 0
         )
 
     def _create_select_panel(self, selected_idx: int) -> Panel:
@@ -349,13 +347,9 @@ class InteractiveSelect:
                         next2 = sys.stdin.read(1)
                         if next1 == "[":
                             if next2 == "A":  # Up arrow
-                                self.selected_index = (self.selected_index - 1) % len(
-                                    self.choices
-                                )
+                                self.selected_index = (self.selected_index - 1) % len(self.choices)
                             elif next2 == "B":  # Down arrow
-                                self.selected_index = (self.selected_index + 1) % len(
-                                    self.choices
-                                )
+                                self.selected_index = (self.selected_index + 1) % len(self.choices)
 
             finally:
                 if old_settings is not None:
@@ -371,6 +365,7 @@ class InteractiveSelect:
             # Try to render Rich markup, fallback to plain text
             try:
                 from rich.text import Text
+
                 choice_text = Text.from_markup(choice)
                 console.print(f"  {idx}. ", end="")
                 console.print(choice_text)

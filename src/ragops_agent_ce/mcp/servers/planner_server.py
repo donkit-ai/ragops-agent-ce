@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import os
 import re
+from typing import Self
 
-import mcp
+from fastmcp import FastMCP
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
@@ -16,7 +17,7 @@ class RagConfigPlanArgs(BaseModel):
     rag_config: RagConfig = Field(default_factory=RagConfig)
 
     @model_validator(mode="after")
-    def _set_default_collection_name(self) -> RagConfigPlanArgs:
+    def _set_default_collection_name(self) -> Self:
         """Ensure retriever_options.collection_name is set.
         If missing/empty, use project_id as a sensible default.
         For Milvus, ensure collection name starts with underscore or letter.
@@ -29,16 +30,15 @@ class RagConfigPlanArgs(BaseModel):
             collection_name = self.rag_config.retriever_options.collection_name
             if not re.match(r"^[a-zA-Z_]", collection_name):
                 self.rag_config.retriever_options.collection_name = f"_{collection_name}"
-        
+
         # Ensure embedder.embedder_type is preserved if explicitly set
-        # If embedder was passed but embedder_type is default (vertex), check if we should preserve it
-        # This prevents overwriting user's choice
+        # If embedder was passed but embedder_type is default (vertex),
+        # check if we should preserve it. This prevents overwriting user's choice
         return self
 
 
-server = mcp.server.FastMCP(
+server = FastMCP(
     "rag-config-planner",
-    log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
 
 
@@ -47,17 +47,22 @@ server = mcp.server.FastMCP(
     description=(
         "Suggest a RAG configuration (vectorstore/chunking/retriever/ranker) "
         "for the given project and sources. "
-        "IMPORTANT: When passing rag_config parameter, ensure embedder.embedder_type is explicitly set "
-        "to match user's choice (openai, vertex, or azure_openai). Do not rely on defaults."
+        "IMPORTANT: When passing rag_config parameter, ensure embedder.embedder_type "
+        "is explicitly set to match user's choice (openai, vertex, or azure_openai). "
+        "Do not rely on defaults."
     ),
 )
-async def rag_config_plan(args: RagConfigPlanArgs) -> mcp.types.TextContent:
+async def rag_config_plan(args: RagConfigPlanArgs) -> str:
     plan = args.rag_config.model_dump_json()
-    return mcp.types.TextContent(type="text", text=plan)
+    return plan
 
 
 def main() -> None:
-    server.run(transport="stdio")
+    server.run(
+        transport="stdio",
+        log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
+        show_banner=False,
+    )
 
 
 if __name__ == "__main__":

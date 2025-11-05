@@ -328,6 +328,7 @@ def tool_grep() -> AgentTool:
 
 def tool_interactive_user_choice() -> AgentTool:
     """Tool for interactive selection from multiple options using arrow keys."""
+
     def _handler(args: dict[str, Any]) -> str:
         title = str(args.get("title", "Select an option"))
         choices_list = args.get("choices", [])
@@ -409,6 +410,7 @@ def tool_interactive_user_choice() -> AgentTool:
 
 def tool_interactive_user_confirm() -> AgentTool:
     """Tool for interactive yes/no confirmation using arrow keys."""
+
     def _handler(args: dict[str, Any]) -> str:
         question = str(args.get("question", "Continue?"))
         default = args.get("default", True)

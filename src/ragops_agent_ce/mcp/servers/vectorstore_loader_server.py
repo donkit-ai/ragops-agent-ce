@@ -4,16 +4,16 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-import mcp
 from donkit.embeddings import get_vertexai_embeddings
 from donkit.vectorstore_loader import create_vectorstore_loader
+from fastmcp import Context
+from fastmcp import FastMCP
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_openai import AzureOpenAIEmbeddings
 from langchain_openai import OpenAIEmbeddings
 from pydantic import BaseModel
 from pydantic import Field
-from pydantic import validate_call
 
 
 def create_embedder(embedder_type: str) -> Embeddings:
@@ -96,9 +96,8 @@ class VectorstoreLoadArgs(BaseModel):
     params: VectorstoreParams
 
 
-server = mcp.server.FastMCP(
+server = FastMCP(
     "rag-vectorstore-loader",
-    log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
 )
 
 
@@ -112,16 +111,16 @@ server = mcp.server.FastMCP(
         "Use list_directory on chunked folder to find which files to load."
     ),
 )
-@validate_call
 async def vectorstore_load(
-    chunks_path: str,
-    params: VectorstoreParams,
-) -> mcp.types.TextContent:
+    args: VectorstoreLoadArgs,
+    ctx: Context,
+) -> str:
+    chunks_path = args.chunks_path
+    params = args.params
     if "localhost" not in params.database_uri:
-        return mcp.types.TextContent(
-            type="text",
-            text="Error: database URI must be outside "
-            "docker like 'localhost' or '127.0.0.1' or '0.0.0.0'",
+        return (
+            "Error: database URI must be outside "
+            "docker like 'localhost' or '127.0.0.1' or '0.0.0.0'"
         )
 
     # Determine files to load based on chunks_path
@@ -140,20 +139,16 @@ async def vectorstore_load(
         if file_path.suffix == ".json":
             json_files.append(file_path)
         else:
-            return mcp.types.TextContent(
-                type="text", text=f"Error: file must be JSON, got {file_path.suffix}"
-            )
+            return f"Error: file must be JSON, got {file_path.suffix}"
     # Check if it's a directory
     elif Path(chunks_path).is_dir():
         dir_path = Path(chunks_path)
         json_files = sorted([f for f in dir_path.iterdir() if f.is_file() and f.suffix == ".json"])
     else:
-        return mcp.types.TextContent(type="text", text=f"Error: path not found: {chunks_path}")
+        return f"Error: path not found: {chunks_path}"
 
     if not json_files:
-        return mcp.types.TextContent(
-            type="text", text=f"Error: no JSON files found in {chunks_path}"
-        )
+        return f"Error: no JSON files found in {chunks_path}"
 
     try:
         embeddings = create_embedder(params.embedder_type)
@@ -164,18 +159,17 @@ async def vectorstore_load(
             database_uri=params.database_uri,
         )
     except ValueError as e:
-        return mcp.types.TextContent(type="text", text=f"Error initializing vectorstore: {e}")
+        return f"Error initializing vectorstore: {e}"
     except Exception as e:
-        return mcp.types.TextContent(
-            type="text", text=f"Unexpected error during initialization: {e}"
-        )
+        return f"Unexpected error during initialization: {e}"
 
     # Load files one by one for detailed tracking
     total_chunks_loaded = 0
     successful_files: list[tuple[str, int]] = []  # (filename, chunk_count)
     failed_files: list[tuple[str, str]] = []  # (filename, error_message)
 
-    for file in json_files:
+    total_files = len(json_files)
+    for file_idx, file in enumerate(json_files, start=1):
         try:
             # Read and parse JSON file
             with file.open("r", encoding="utf-8") as f:
@@ -203,12 +197,51 @@ async def vectorstore_load(
                 continue
 
             try:
-                task_id = uuid4()
-                loader.load_documents(task_id=task_id, documents=documents)
-
+                # Load documents in batches of 100 to avoid memory issues with large files
+                batch_size = 500
                 chunk_count = len(documents)
+                total_batches = (chunk_count + batch_size - 1) // batch_size
+
+                for batch_idx in range(total_batches):
+                    start_idx = batch_idx * batch_size
+                    end_idx = min(start_idx + batch_size, chunk_count)
+                    batch = documents[start_idx:end_idx]
+
+                    task_id = uuid4()
+                    loader.load_documents(task_id=task_id, documents=batch)
+
+                    # Report batch progress
+                    if total_batches > 1:
+                        if total_files > 1:
+                            batch_msg = (
+                                f"File {file_idx}/{total_files} - "
+                                f"Batch {batch_idx + 1}/{total_batches} ({len(batch)} chunks)"
+                            )
+                        else:
+                            batch_msg = (
+                                f"Batch {batch_idx + 1}/{total_batches} ({len(batch)} chunks)"
+                            )
+                        await ctx.report_progress(
+                            progress=batch_idx + 1,
+                            total=total_batches,
+                            message=batch_msg,
+                        )
+
                 total_chunks_loaded += chunk_count
                 successful_files.append((file.name, chunk_count))
+
+                # Report file progress
+                percentage = (file_idx / total_files) * 100
+                msg = (
+                    f"{file_idx}/{total_files} files ({percentage:.1f}%) - "
+                    f"{file.name}: {chunk_count} chunks loaded"
+                )
+                print(msg)
+                await ctx.report_progress(
+                    progress=file_idx,
+                    total=total_files,
+                    message=msg,
+                )
 
             except Exception as e:
                 failed_files.append((file.name, f"vectorstore error: {str(e)}"))
@@ -245,11 +278,15 @@ async def vectorstore_load(
         for filename, error in failed_files:
             summary_lines.append(f"  • {filename}: {error}")
 
-    return mcp.types.TextContent(type="text", text="\n".join(summary_lines))
+    return "\n".join(summary_lines)
 
 
 def main() -> None:
-    server.run(transport="stdio")
+    server.run(
+        transport="stdio",
+        log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
+        show_banner=False,
+    )
 
 
 if __name__ == "__main__":

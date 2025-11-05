@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -57,10 +58,10 @@ from .llm.provider_factory import get_provider
 from .llm.types import Message
 from .logging_config import setup_logging
 from .mcp.client import MCPClient
-from .prints import RAGOPS_LOGO_ART
-from .prints import RAGOPS_LOGO_TEXT
 from .model_selector import save_model_selection
 from .model_selector import select_model_at_startup
+from .prints import RAGOPS_LOGO_ART
+from .prints import RAGOPS_LOGO_TEXT
 from .setup_wizard import run_setup_if_needed
 
 app = typer.Typer(
@@ -131,15 +132,17 @@ def main(
             # Provider provided via CLI, save it to KV database as latest
             save_model_selection(provider, model)
 
-        _start_repl(
-            system=system or VERTEX_SYSTEM_PROMPT
-            if provider == "vertex" or provider == "vertexai"
-            else OPENAI_SYSTEM_PROMPT,
-            model=model,
-            provider=provider,
-            mcp_commands=DEFAULT_MCP_COMMANDS,
-            mcp_only=False,
-            show_checklist=show_checklist,
+        asyncio.run(
+            _astart_repl(
+                system=system or VERTEX_SYSTEM_PROMPT
+                if provider == "vertex" or provider == "vertexai"
+                else OPENAI_SYSTEM_PROMPT,
+                model=model,
+                provider=provider,
+                mcp_commands=DEFAULT_MCP_COMMANDS,
+                mcp_only=False,
+                show_checklist=show_checklist,
+            )
         )
 
 
@@ -190,7 +193,7 @@ def _render_markdown_to_rich(text: str) -> str:
     return result
 
 
-def _start_repl(
+async def _astart_repl(
     *,
     system: str | None,
     model: str | None,
@@ -206,7 +209,7 @@ def _start_repl(
     if provider:
         os.environ.setdefault("RAGOPS_LLM_PROVIDER", provider)
         settings = settings.model_copy(update={"llm_provider": provider})
-    
+
     # Try to get provider and validate credentials
     try:
         prov = get_provider(settings, llm_provider=provider)
@@ -216,13 +219,6 @@ def _start_repl(
         raise typer.Exit(code=1)
 
     tools = [] if mcp_only else default_tools()
-    mcp_clients = []
-    commands = mcp_commands if mcp_commands is not None else []
-    if commands:
-        for cmd_str in commands:
-            cmd_parts = shlex.split(cmd_str)
-            logger.debug(f"Starting MCP client: {cmd_parts}")
-            mcp_clients.append(MCPClient(cmd_parts[0], cmd_parts[1:]))
 
     session_started_at = time.time()
 
@@ -234,6 +230,44 @@ def _start_repl(
     transcript: list[str] = []
     agent_settings = AgentSettings(llm_provider=prov, model=model)
     renderer = ScreenRenderer()
+
+    # Progress state for MCP tools
+    progress_line_index: int | None = None
+
+    def mcp_progress_callback(progress: float, total: float | None, message: str | None) -> None:
+        """Callback for MCP tool progress updates."""
+        nonlocal progress_line_index
+
+        if total is not None:
+            percentage = (progress / total) * 100
+            progress_text = f"[dim]⏳ Progress: {percentage:.1f}% - {message or ''}[/dim]"
+        else:
+            progress_text = f"[dim]⏳ Progress: {progress} - {message or ''}[/dim]"
+
+        if progress_line_index is None:
+            # First progress update - add new line
+            transcript.append(progress_text)
+            progress_line_index = len(transcript) - 1
+        else:
+            # Update existing progress line
+            transcript[progress_line_index] = progress_text
+
+        # Re-render to show progress
+        cl_text = _get_session_checklist() if show_checklist else None
+        renderer.render_project(
+            transcript, cl_text, agent_settings=agent_settings, show_input_space=False
+        )
+
+    # Create MCP clients with progress callback
+    mcp_clients = []
+    commands = mcp_commands if mcp_commands is not None else []
+    if commands:
+        for cmd_str in commands:
+            cmd_parts = shlex.split(cmd_str)
+            logger.debug(f"Starting MCP client: {cmd_parts}")
+            mcp_clients.append(
+                MCPClient(cmd_parts[0], cmd_parts[1:], progress_callback=mcp_progress_callback)
+            )
 
     # Helpers for rendering and transcript updates
     def _render_current_screen(show_input_space: bool) -> None:
@@ -269,6 +303,7 @@ def _start_repl(
     def _process_stream_event(
         event, reply: str, display_content: str, temp_executing: str
     ) -> tuple[str, str, str]:
+        nonlocal progress_line_index
         et = getattr(event, "type", None)
         if et == "content":
             content_chunk = event.content or ""
@@ -314,8 +349,16 @@ def _start_repl(
                     agent_settings=agent_settings,
                     show_input_space=False,
                 )
+            # Remove progress line and reset for next tool execution
+            if progress_line_index is not None:
+                transcript.pop(progress_line_index)
+            progress_line_index = None
             return reply, display_content + _tool_done_message(event.tool_name), ""
         if et == "tool_call_error":
+            # Remove progress line and reset for next tool execution
+            if progress_line_index is not None:
+                transcript.pop(progress_line_index)
+            progress_line_index = None
             return (
                 reply,
                 display_content + _tool_error_message(event.tool_name, event.error or ""),
@@ -347,6 +390,8 @@ def _start_repl(
         tools=tools,
         mcp_clients=mcp_clients,
     )
+    # Initialize MCP tools asynchronously
+    await agent._ainit_mcp_tools()
     renderer.render_startup_screen()
 
     # Render welcome message as markdown
@@ -422,6 +467,7 @@ def _start_repl(
                 tools=tools,
                 mcp_clients=mcp_clients,
             )
+            await agent._ainit_mcp_tools()
             transcript.append(
                 "[bold cyan]Agent updated:[/bold cyan] "
                 f"Provider set to [yellow]{new_provider}[/yellow], "
@@ -460,7 +506,7 @@ def _start_repl(
                     temp_executing = ""
 
                     # Stream events - process content and tool calls
-                    for event in agent.respond_stream(history, model=model):
+                    async for event in agent.arespond_stream(history, model=model):
                         reply, display_content, temp_executing = _process_stream_event(
                             event, reply, display_content, temp_executing
                         )
@@ -485,7 +531,7 @@ def _start_repl(
                 response_index = _start_agent_placeholder()
 
                 try:
-                    reply = agent.respond(history, model=model)
+                    reply = await agent.arespond(history, model=model)
                     history.append(Message(role="assistant", content=reply))
 
                     # Replace placeholder with actual response

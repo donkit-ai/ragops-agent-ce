@@ -18,8 +18,9 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Literal
+from typing import Self
 
-import mcp
+from fastmcp import FastMCP
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
@@ -180,9 +181,8 @@ def get_compose_command() -> list[str]:
         return ["docker-compose"]
 
 
-server = mcp.server.FastMCP(
+server = FastMCP(
     "ragops-compose-manager",
-    log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
 
 
@@ -301,7 +301,7 @@ class InitProjectComposeArgs(BaseModel):
     rag_config: RagConfig = Field(description="RAG service configuration")
 
     @model_validator(mode="after")
-    def _set_default_collection_name(self) -> "InitProjectComposeArgs":
+    def _set_default_collection_name(self) -> Self:
         """Ensure retriever_options.collection_name is set.
         If missing/empty, use project_id as a sensible default.
         For Milvus, ensure collection name starts with underscore or letter.
@@ -371,20 +371,20 @@ class GetLogsArgs(BaseModel):
     name="list_available_services",
     description="Get list of available Docker Compose services that can be started",
 )
-async def list_available_services() -> mcp.types.TextContent:
+async def list_available_services() -> str:
     """List available services."""
     result = {
         "services": list(AVAILABLE_SERVICES.values()),
         "compose_dir": str(SERVICES_DIR),
     }
-    return mcp.types.TextContent(type="text", text=json.dumps(result, indent=2))
+    return json.dumps(result, indent=2)
 
 
 @server.tool(
     name="init_project_compose",
     description="Initialize docker-compose file in the project directory with RAG configuration",
 )
-async def init_project_compose(args: InitProjectComposeArgs) -> mcp.types.TextContent:
+async def init_project_compose(args: InitProjectComposeArgs) -> str:
     """Initialize compose files in project."""
     compose_target = Path(f"projects/{args.project_id}").resolve()
     # Create compose directory
@@ -400,11 +400,8 @@ async def init_project_compose(args: InitProjectComposeArgs) -> mcp.types.TextCo
         shutil.copy2(source, target)
         copied_files.append(f"compose/{COMPOSE_FILE}")
     else:
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {"status": "error", "message": f"Source compose file not found: {source}"}
-            ),
+        return json.dumps(
+            {"status": "error", "message": f"Source compose file not found: {source}"}
         )
 
     # Read Vertex credentials if path provided
@@ -445,7 +442,13 @@ async def init_project_compose(args: InitProjectComposeArgs) -> mcp.types.TextCo
         "rag_config_applied": args.rag_config is not None,
     }
 
-    return mcp.types.TextContent(type="text", text=json.dumps(result, indent=2))
+    return json.dumps(result, indent=2)
+
+
+class ListContainersArgs(BaseModel):
+    """Empty args model for list_containers (FastMCP requires args parameter)."""
+
+    pass
 
 
 @server.tool(
@@ -455,11 +458,11 @@ async def init_project_compose(args: InitProjectComposeArgs) -> mcp.types.TextCo
         "if want to analyze whether container from another project occupies the same port"
     ),
 )
-async def list_containers() -> mcp.types.TextContent:
+async def list_containers() -> str:
     """List Docker containers."""
     try:
         result = subprocess.run(
-            ["docker", "ps", "--format", "{{json .}}"],
+            ["docker", "ps", "--format", r"{{json .}}"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -472,25 +475,17 @@ async def list_containers() -> mcp.types.TextContent:
                     containers.append(container_info)
                 except json.JSONDecodeError:
                     continue
-            return mcp.types.TextContent(
-                type="text",
-                text=json.dumps({"status": "success", "containers": containers}, indent=2),
-            )
+            return json.dumps({"status": "success", "containers": containers}, indent=2)
         else:
-            return mcp.types.TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "status": "error",
-                        "message": "Failed to list containers",
-                        "error": result.stderr,
-                    }
-                ),
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": "Failed to list containers",
+                    "error": result.stderr,
+                }
             )
     except Exception as e:
-        return mcp.types.TextContent(
-            type="text", text=json.dumps({"status": "error", "message": str(e)})
-        )
+        return json.dumps({"status": "error", "message": str(e)})
 
 
 @server.tool(
@@ -500,7 +495,7 @@ async def list_containers() -> mcp.types.TextContent:
         "if want to stop container from another project that occupies the same port"
     ),
 )
-async def stop_container(args: StopContainerArgs) -> mcp.types.TextContent:
+async def stop_container(args: StopContainerArgs) -> str:
     """Stop a Docker container by ID or name."""
     container_id = args.container_id
 
@@ -512,27 +507,17 @@ async def stop_container(args: StopContainerArgs) -> mcp.types.TextContent:
             timeout=30,
         )
         if result.returncode == 0:
-            return mcp.types.TextContent(
-                type="text",
-                text=json.dumps(
-                    {"status": "success", "message": f"Container {container_id} stopped"}
-                ),
-            )
+            return json.dumps({"status": "success", "message": f"Container {container_id} stopped"})
         else:
-            return mcp.types.TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"Failed to stop container {container_id}",
-                        "error": result.stderr,
-                    }
-                ),
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"Failed to stop container {container_id}",
+                    "error": result.stderr,
+                }
             )
     except Exception as e:
-        return mcp.types.TextContent(
-            type="text", text=json.dumps({"status": "error", "message": str(e)})
-        )
+        return json.dumps({"status": "error", "message": str(e)})
 
 
 @server.tool(
@@ -542,7 +527,7 @@ async def stop_container(args: StopContainerArgs) -> mcp.types.TextContent:
         "if want to redeploy with another configuration use init_project_compose first"
     ),
 )
-async def start_service(args: StartServiceArgs) -> mcp.types.TextContent:
+async def start_service(args: StartServiceArgs) -> str:
     """Start a service."""
     service = args.service
     project_path = Path(f"projects/{args.project_id}").resolve()
@@ -552,29 +537,20 @@ async def start_service(args: StartServiceArgs) -> mcp.types.TextContent:
     # Check Docker
     docker_ok, docker_msg = check_docker_installed()
     if not docker_ok:
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps({"status": "error", "message": docker_msg}),
-        )
+        return json.dumps({"status": "error", "message": docker_msg})
 
     compose_ok, compose_msg = check_docker_compose_installed()
     if not compose_ok:
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps({"status": "error", "message": compose_msg}),
-        )
+        return json.dumps({"status": "error", "message": compose_msg})
 
     # Check service exists
     if service not in AVAILABLE_SERVICES:
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {
-                    "status": "error",
-                    "message": f"Unknown service: {service}. "
-                    f"Available: {list(AVAILABLE_SERVICES.keys())}",
-                }
-            ),
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"Unknown service: {service}. "
+                f"Available: {list(AVAILABLE_SERVICES.keys())}",
+            }
         )
 
     # Get compose file and profile
@@ -582,15 +558,12 @@ async def start_service(args: StartServiceArgs) -> mcp.types.TextContent:
     profile = AVAILABLE_SERVICES[service]["profile"]
 
     if not compose_file.exists():
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {
-                    "status": "error",
-                    "message": f"Compose file not found: {compose_file}. "
-                    f"Run init_project_compose first.",
-                }
-            ),
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"Compose file not found: {compose_file}. "
+                f"Run init_project_compose first.",
+            }
         )
 
     # Build command with profile and explicit project name
@@ -691,71 +664,51 @@ async def start_service(args: StartServiceArgs) -> mcp.types.TextContent:
                     ports = [port_mapping]
                     url = f"http://localhost:{host_port}"
 
-            return mcp.types.TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "status": "success",
-                        "service": service,
-                        "message": f"{service_info['description']} started successfully",
-                        "url": url,
-                        "ports": ports,
-                        "custom_ports_applied": args.custom_ports is not None,
-                        "output": result.stdout,
-                    },
-                    indent=2,
-                ),
+            return json.dumps(
+                {
+                    "status": "success",
+                    "service": service,
+                    "message": f"{service_info['description']} started successfully",
+                    "url": url,
+                    "ports": ports,
+                    "custom_ports_applied": args.custom_ports is not None,
+                    "output": result.stdout,
+                },
+                indent=2,
             )
         else:
-            return mcp.types.TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "status": "error",
-                        "message": "Failed to start service",
-                        "error": result.stderr,
-                    }
-                ),
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": "Failed to start service",
+                    "error": result.stderr,
+                }
             )
 
     except subprocess.TimeoutExpired:
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps({"status": "error", "message": "Command timed out after 120 seconds"}),
-        )
+        return json.dumps({"status": "error", "message": "Command timed out after 120 seconds"})
     except Exception as e:
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps({"status": "error", "message": str(e)}),
-        )
+        return json.dumps({"status": "error", "message": str(e)})
 
 
 @server.tool(
     name="stop_service",
     description="Stop a Docker Compose service",
 )
-async def stop_service(args: StopServiceArgs) -> mcp.types.TextContent:
+async def stop_service(args: StopServiceArgs) -> str:
     """Stop a service."""
     service = args.service
     project_path = Path(f"projects/{args.project_id}").resolve()
     remove_volumes = args.remove_volumes
 
     if service not in AVAILABLE_SERVICES:
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps({"status": "error", "message": f"Unknown service: {service}"}),
-        )
+        return json.dumps({"status": "error", "message": f"Unknown service: {service}"})
 
     compose_file = project_path / COMPOSE_FILE
     profile = AVAILABLE_SERVICES[service]["profile"]
 
     if not compose_file.exists():
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {"status": "error", "message": f"Compose file not found: {compose_file}"}
-            ),
-        )
+        return json.dumps({"status": "error", "message": f"Compose file not found: {compose_file}"})
 
     cmd = get_compose_command()
     cmd.extend(
@@ -786,46 +739,35 @@ async def stop_service(args: StopServiceArgs) -> mcp.types.TextContent:
         result = subprocess.run(cmd, **run_kwargs)
 
         if result.returncode == 0:
-            return mcp.types.TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "status": "success",
-                        "service": service,
-                        "message": f"{service} stopped successfully",
-                        "output": result.stdout,
-                    },
-                    indent=2,
-                ),
+            return json.dumps(
+                {
+                    "status": "success",
+                    "service": service,
+                    "message": f"{service} stopped successfully",
+                    "output": result.stdout,
+                },
+                indent=2,
             )
         else:
-            return mcp.types.TextContent(
-                type="text",
-                text=json.dumps(
-                    {"status": "error", "message": "Failed to stop service", "error": result.stderr}
-                ),
+            return json.dumps(
+                {"status": "error", "message": "Failed to stop service", "error": result.stderr}
             )
 
     except Exception as e:
-        return mcp.types.TextContent(
-            type="text", text=json.dumps({"status": "error", "message": str(e)})
-        )
+        return json.dumps({"status": "error", "message": str(e)})
 
 
 @server.tool(
     name="service_status",
     description="Check status of Docker Compose services",
 )
-async def service_status(args: ServiceStatusArgs) -> mcp.types.TextContent:
+async def service_status(args: ServiceStatusArgs) -> str:
     """Check service status."""
     service = args.service
     project_path = Path(f"projects/{args.project_id}").resolve()
 
     if not project_path.exists():
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps({"status": "error", "message": "Project directory not found"}),
-        )
+        return json.dumps({"status": "error", "message": "Project directory not found"})
 
     # Get list of services to check
     services_to_check = [service] if service else list(AVAILABLE_SERVICES.keys())
@@ -833,12 +775,7 @@ async def service_status(args: ServiceStatusArgs) -> mcp.types.TextContent:
     compose_file = project_path / COMPOSE_FILE
 
     if not compose_file.exists():
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {"status": "error", "message": f"Compose file not found: {compose_file}"}
-            ),
-        )
+        return json.dumps({"status": "error", "message": f"Compose file not found: {compose_file}"})
 
     statuses = []
     cmd = get_compose_command()
@@ -905,35 +842,27 @@ async def service_status(args: ServiceStatusArgs) -> mcp.types.TextContent:
         except Exception as e:
             statuses.append({"service": svc, "status": "error", "error": str(e)})
 
-    return mcp.types.TextContent(type="text", text=json.dumps({"services": statuses}, indent=2))
+    return json.dumps({"services": statuses}, indent=2)
 
 
 @server.tool(
     name="get_logs",
     description="Get logs from a Docker Compose service",
 )
-async def get_logs(args: GetLogsArgs) -> mcp.types.TextContent:
+async def get_logs(args: GetLogsArgs) -> str:
     """Get service logs."""
     service = args.service
     tail = args.tail
     project_path = Path(f"projects/{args.project_id}").resolve()
 
     if service not in AVAILABLE_SERVICES:
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps({"status": "error", "message": f"Unknown service: {service}"}),
-        )
+        return json.dumps({"status": "error", "message": f"Unknown service: {service}"})
 
     compose_file = project_path / COMPOSE_FILE
     profile = AVAILABLE_SERVICES[service]["profile"]
 
     if not compose_file.exists():
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {"status": "error", "message": f"Compose file not found: {compose_file}"}
-            ),
-        )
+        return json.dumps({"status": "error", "message": f"Compose file not found: {compose_file}"})
 
     cmd = get_compose_command()
     cmd.extend(
@@ -963,27 +892,24 @@ async def get_logs(args: GetLogsArgs) -> mcp.types.TextContent:
 
         result = subprocess.run(cmd, **run_kwargs)
 
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {
-                    "service": service,
-                    "logs": result.stdout,
-                },
-                indent=2,
-            ),
+        return json.dumps(
+            {
+                "service": service,
+                "logs": result.stdout,
+            },
+            indent=2,
         )
 
     except Exception as e:
-        return mcp.types.TextContent(
-            type="text", text=json.dumps({"status": "error", "message": str(e)})
-        )
+        return json.dumps({"status": "error", "message": str(e)})
 
 
 def main() -> None:
-    """Run the MCP server."""
-    print("Compose manager server starting")
-    server.run(transport="stdio")
+    server.run(
+        transport="stdio",
+        log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
+        show_banner=False,
+    )
 
 
 if __name__ == "__main__":

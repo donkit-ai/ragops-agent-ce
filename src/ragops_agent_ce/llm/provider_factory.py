@@ -22,29 +22,29 @@ def __get_vertex_credentials():
     credentials_path = load_settings().vertex_credentials
     if not credentials_path:
         raise ValueError("RAGOPS_VERTEX_CREDENTIALS is not set in .env file")
-    
-    from pathlib import Path
+
     import os
-    
+    from pathlib import Path
+
     # Expand user path
     credentials_path = os.path.expanduser(credentials_path)
     creds_file = Path(credentials_path)
-    
+
     if not creds_file.exists():
         raise FileNotFoundError(
             f"Credentials file not found: {credentials_path}\n"
             "Please ensure RAGOPS_VERTEX_CREDENTIALS path is correctly set in .env file."
         )
-    
+
     try:
         with open(creds_file) as f:
             credentials_data = json.load(f)
     except json.JSONDecodeError as e:
         raise ValueError(f"Error reading credentials file: {e}")
-    
+
     if not credentials_data:
         raise ValueError("Credentials file is empty or contains no data")
-    
+
     return credentials_data
 
 

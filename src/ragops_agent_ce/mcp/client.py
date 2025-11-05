@@ -3,15 +3,15 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from dotenv import dotenv_values
 from dotenv import find_dotenv
+from fastmcp import Client
+from fastmcp.client.transports import StdioTransport
 from loguru import logger
-from mcp import ClientSession
-from mcp import StdioServerParameters
-from mcp.client.stdio import stdio_client
 
 
 def _load_env_for_mcp() -> dict[str, str | None]:
@@ -21,7 +21,7 @@ def _load_env_for_mcp() -> dict[str, str | None]:
     1. Current os.environ (so MCP server inherits parent env)
     2. Variables from .env files (with multiple search strategies for Windows compatibility)
 
-    Returns dict suitable for StdioServerParameters(env=...)
+    Returns dict with environment variables for the MCP server process.
     """
     # Start with current environment
     env = dict(os.environ)
@@ -35,7 +35,8 @@ def _load_env_for_mcp() -> dict[str, str | None]:
             env.update(dotenv_values(cwd_path))
             env_loaded = True
             logger.debug(f"Loaded MCP env from {cwd_path}")
-
+        if env_loaded:
+            break
         # 2. Parent directories (walk up 3 levels)
         parent = Path.cwd()
         for _ in range(4):
@@ -46,7 +47,6 @@ def _load_env_for_mcp() -> dict[str, str | None]:
                 env_loaded = True
                 logger.debug(f"Loaded MCP env from {parent_env}")
                 break
-
         # 3. Fallback to find_dotenv
         if not env_loaded:
             found = find_dotenv(filename=fname, usecwd=True)
@@ -57,89 +57,143 @@ def _load_env_for_mcp() -> dict[str, str | None]:
 
     if not env_loaded:
         logger.debug("No .env file found for MCP server, using current environment only")
-
     return env
 
 
 class MCPClient:
-    """Thin client for connecting to an MCP server via stdio transport.
+    """Client for connecting to an MCP server using FastMCP.
 
-    A new stdio session is created per call (simple and robust). If you need
-    long-lived sessions or high performance, we can refactor to keep a shared
-    running session.
+    Uses the new FastMCP Client API which handles connection lifecycle
+    and protocol operations automatically.
     """
 
-    def __init__(self, command: str, args: list[str] | None = None, timeout: float = 60.0) -> None:
+    def __init__(
+        self,
+        command: str,
+        args: list[str] | None = None,
+        timeout: float = 999.0,
+        progress_callback: Callable[[float, float | None, str | None], None] | None = None,
+    ) -> None:
+        """Initialize MCP client.
+
+        Args:
+            command: Command to run the MCP server (e.g., "python" or "uv")
+            args: Command-line arguments including the script path
+            timeout: Timeout for operations in seconds
+            progress_callback: Optional callback for progress updates from MCP tools
+        """
         self.command = command
         self.args = args or []
         self.timeout = timeout
+        self.progress_callback = progress_callback
+        # Load environment variables for the server
+        self._env = _load_env_for_mcp()
+
+    async def __progress_handler(
+        self,
+        progress: float,
+        total: float | None,
+        message: str | None,
+    ) -> None:
+        """Handle progress updates from read_engine MCP server."""
+        if self.progress_callback:
+            self.progress_callback(progress, total, message)
+        else:
+            # Fallback to print if no callback provided
+            if total is not None:
+                percentage = (progress / total) * 100
+                print(f"Progress: {percentage:.1f}% - {message or ''}")
+            else:
+                print(f"Progress: {progress} - {message or ''}")
 
     async def _alist_tools(self) -> list[dict]:
-        server_params = StdioServerParameters(
-            command=self.command, args=self.args, env=_load_env_for_mcp()
+        """List available tools from the MCP server."""
+        # Create StdioTransport with explicit command, args, and environment
+        transport = StdioTransport(
+            command=self.command,
+            args=self.args,
+            env=self._env,
+            keep_alive=True,
         )
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                tools_resp = await session.list_tools()
-                tools = []
-                for t in tools_resp.tools:
-                    # t has: name, description, input_schema (JSON Schema)
-                    schema: dict[str, Any] = {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": True,
+        client = Client(transport)
+        async with client:
+            tools_resp = await client.list_tools()
+            tools = []
+            for t in tools_resp:
+                # FastMCP returns Tool objects with name, description, and inputSchema (dict)
+                schema: dict[str, Any] = {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": True,
+                }
+                # Access inputSchema attribute (note: lowercase 's' in input_schema or inputSchema)
+                raw_schema = getattr(t, "inputSchema", None) or getattr(t, "input_schema", None)
+                if raw_schema and isinstance(raw_schema, dict):
+                    try:
+                        # FastMCP wraps Pydantic models in {"args": <model>}
+                        # Unwrap by following $ref to get actual model schema
+                        if "properties" in raw_schema:
+                            if "args" in raw_schema["properties"] and "$defs" in raw_schema:
+                                # Get the ref target
+                                args_ref = raw_schema["properties"]["args"].get("$ref")
+                                if args_ref and args_ref.startswith("#/$defs/"):
+                                    def_name = args_ref.split("/")[-1]
+                                    if def_name in raw_schema["$defs"]:
+                                        # Use the unwrapped model schema
+                                        schema = raw_schema["$defs"][def_name].copy()
+                                        # Preserve $defs for nested refs
+                                        if "$defs" in raw_schema:
+                                            schema["$defs"] = raw_schema["$defs"]
+                            else:
+                                # No args wrapper, use as is
+                                schema = raw_schema
+                    except Exception as e:
+                        logger.warning(f"Failed to parse schema for tool {t.name}: {e}")
+                tools.append(
+                    {
+                        "name": t.name,
+                        "description": t.description or "",
+                        "parameters": schema,
                     }
-                    # Support both snake_case and camelCase per SDK/version
-                    cand = None
-                    if hasattr(t, "input_schema"):
-                        cand = getattr(t, "input_schema")
-                    elif hasattr(t, "inputSchema"):
-                        cand = getattr(t, "inputSchema")
-                    if cand is not None:
-                        try:
-                            # Pydantic model
-                            if hasattr(cand, "model_dump"):
-                                schema = cand.model_dump()  # type: ignore[attr-defined]
-                            elif isinstance(cand, dict):
-                                schema = cand
-                        except Exception:
-                            pass
-                    tools.append(
-                        {
-                            "name": t.name,
-                            "description": getattr(t, "description", "") or "",
-                            "parameters": schema,
-                        }
-                    )
-                return tools
+                )
+            return tools
 
     def list_tools(self) -> list[dict]:
+        """Synchronously list available tools."""
         return asyncio.run(asyncio.wait_for(self._alist_tools(), timeout=self.timeout))
 
     async def _acall_tool(self, name: str, arguments: dict[str, Any]) -> str:
+        """Call a tool on the MCP server."""
         logger.debug(f"Calling tool {name} with arguments {arguments}")
-        server_params = StdioServerParameters(
-            command=self.command, args=self.args, env=_load_env_for_mcp()
+        # Create StdioTransport with explicit command, args, and environment
+        transport = StdioTransport(
+            command=self.command, args=self.args, env=self._env, keep_alive=True
         )
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                result = await session.call_tool(name, arguments)
-                parts = getattr(result, "content", [])
+        client = Client(transport, progress_handler=self.__progress_handler)
+        async with client:
+            # FastMCP wraps Pydantic models in {"args": <model>}, so wrap arguments
+            wrapped_args = {"args": arguments} if arguments else None
+            logger.debug(f"Wrapped arguments for {name}: {wrapped_args}")
+            result = await client.call_tool(name, wrapped_args)
+            # FastMCP returns ToolResult with content and optional data
+            # Try to extract text content first
+            if hasattr(result, "content") and result.content:
                 texts: list[str] = []
-                for p in parts:
-                    pt = getattr(p, "type", None)
-                    if pt == "text" and hasattr(p, "text"):
-                        texts.append(p.text)
+                for content_item in result.content:
+                    if hasattr(content_item, "text"):
+                        texts.append(content_item.text)
                 if texts:
                     return "\n".join(texts)
-                try:
-                    return json.dumps(parts[0]) if parts else ""
-                except Exception:
-                    return ""
+            # Fall back to structured data if available
+            if hasattr(result, "data") and result.data is not None:
+                if isinstance(result.data, str):
+                    return result.data
+                return json.dumps(result.data)
+            # Last resort: stringify the whole result
+            return str(result)
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
+        """Synchronously call a tool."""
         result = asyncio.run(
             asyncio.wait_for(self._acall_tool(name, arguments), timeout=self.timeout)
         )

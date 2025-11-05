@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from pathlib import Path
 
-import mcp
 from donkit.chunker import ChunkerConfig
 from donkit.chunker import DonkitChunker
+from fastmcp import FastMCP
+from loguru import logger
 from pydantic import BaseModel
 from pydantic import Field
 
@@ -24,9 +26,8 @@ class ChunkDocumentsArgs(BaseModel):
     )
 
 
-server = mcp.server.FastMCP(
+server = FastMCP(
     "rag-chunker",
-    log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
 
 
@@ -41,19 +42,19 @@ server = mcp.server.FastMCP(
         "MUST always use JSON chunking!"  # TODO: remove when can read in md
     ).strip(),
 )
-async def chunk_documents(args: ChunkDocumentsArgs) -> mcp.types.TextContent:
+async def chunk_documents(args: ChunkDocumentsArgs) -> str:
+    logger.debug(f"chunk_documents called with: {args.model_dump()}")
     chunker = DonkitChunker(args.params)
     source_dir = Path(args.source_path)
 
     if not source_dir.exists() or not source_dir.is_dir():
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps({"status": "error", "message": f"Source path not found: {source_dir}"}),
-        )
+        logger.error(f"Source path not found: {source_dir}")
+        return json.dumps({"status": "error", "message": f"Source path not found: {source_dir}"})
 
     # Create output directory in project
     output_path = Path(f"projects/{args.project_id}/processed/chunked").resolve()
     output_path.mkdir(parents=True, exist_ok=True)
+    logger.debug(f"Output path: {output_path}")
 
     results = {
         "status": "success",
@@ -66,8 +67,10 @@ async def chunk_documents(args: ChunkDocumentsArgs) -> mcp.types.TextContent:
 
     # Get list of files to process
     files_to_process = [f for f in source_dir.iterdir() if f.is_file()]
+    logger.debug(f"Found {len(files_to_process)} files to process")
 
     for file in files_to_process:
+        logger.debug(f"Processing file: {file.name}")
         output_file = output_path / f"{file.name}.json"
 
         # Check if we should skip this file (incremental mode)
@@ -83,16 +86,28 @@ async def chunk_documents(args: ChunkDocumentsArgs) -> mcp.types.TextContent:
                 continue
 
         try:
-            chunked_documents = chunker.chunk_file(
+            logger.debug(f"Starting chunking for {file.name}")
+            # Run blocking chunking operation in thread pool
+            chunked_documents = await asyncio.to_thread(
+                chunker.chunk_file,
                 file_path=str(file),
             )
+            logger.debug(f"Chunking complete for {file.name}, got {len(chunked_documents)} chunks")
+
             payload = [
                 {"page_content": chunk.page_content, "metadata": chunk.metadata}
                 for chunk in chunked_documents
             ]
-            output_file.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+
+            logger.debug(f"Writing chunks to {output_file.name}")
+            # Write to file in thread pool
+            await asyncio.to_thread(
+                output_file.write_text,
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
             )
+            logger.debug(f"Write complete for {file.name}")
+
             results["successful"].append(
                 {
                     "file": str(file),
@@ -101,6 +116,7 @@ async def chunk_documents(args: ChunkDocumentsArgs) -> mcp.types.TextContent:
                 }
             )
         except Exception as e:
+            logger.error(f"Failed to process {file.name}: {e}")
             results["failed"].append({"file": str(file), "error": str(e)})
 
     # Add summary
@@ -111,13 +127,15 @@ async def chunk_documents(args: ChunkDocumentsArgs) -> mcp.types.TextContent:
     )
 
     # Return results as JSON string
-    return mcp.types.TextContent(
-        type="text", text=json.dumps(results, ensure_ascii=False, indent=2)
-    )
+    return json.dumps(results, ensure_ascii=False, indent=2)
 
 
 def main() -> None:
-    server.run(transport="stdio")
+    server.run(
+        transport="stdio",
+        log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
+        show_banner=False,
+    )
 
 
 if __name__ == "__main__":

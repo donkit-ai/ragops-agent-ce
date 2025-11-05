@@ -68,7 +68,7 @@ def get_latest_model_selection() -> tuple[str, str | None] | None:
         return None
     finally:
         # Properly close database connection
-        if hasattr(db, '_engine') and db._engine:
+        if hasattr(db, "_engine") and db._engine:
             db._engine.dispose()
 
 
@@ -86,7 +86,7 @@ def save_model_selection(provider: str, model: str | None = None) -> None:
         kv_set(db, LATEST_MODEL_KEY, json.dumps(data))
     finally:
         # Properly close database connection
-        if hasattr(db, '_engine') and db._engine:
+        if hasattr(db, "_engine") and db._engine:
             db._engine.dispose()
 
 
@@ -200,22 +200,18 @@ def select_model_at_startup(
         has_creds = check_provider_credentials(selected_provider, env_path)
         if not has_creds:
             provider_display = PROVIDERS[selected_provider]["display"]
-            console.print(
-                f"\n[yellow]⚠ {provider_display} is not configured.[/yellow]"
-            )
+            console.print(f"\n[yellow]⚠ {provider_display} is not configured.[/yellow]")
             console.print("[dim]Credentials are required for this provider.[/dim]\n")
 
             # Ask if user wants to configure now
             from ragops_agent_ce.interactive_input import interactive_confirm
 
-            configure_now = interactive_confirm(
-                "Configure credentials now?",
-                default=True
-            )
+            configure_now = interactive_confirm("Configure credentials now?", default=True)
 
             if configure_now:
                 # Run setup wizard for this specific provider
                 from ragops_agent_ce.setup_wizard import SetupWizard
+
                 wizard = SetupWizard(env_path)
 
                 # Set provider in config and run configuration
@@ -229,14 +225,12 @@ def select_model_at_startup(
                         has_creds = check_provider_credentials(selected_provider, env_path)
                         if not has_creds:
                             console.print(
-                                "\n[red]Configuration saved but credentials check "
-                                "failed.[/red]"
+                                "\n[red]Configuration saved but credentials check " "failed.[/red]"
                             )
                             retry_count += 1
                             if retry_count >= max_retries:
                                 console.print(
-                                    f"[red]Maximum retry attempts ({max_retries}) "
-                                    "reached.[/red]"
+                                    f"[red]Maximum retry attempts ({max_retries}) " "reached.[/red]"
                                 )
                                 return None
                             console.print("[yellow]Please try again.[/yellow]\n")
@@ -246,8 +240,7 @@ def select_model_at_startup(
                         retry_count += 1
                         if retry_count >= max_retries:
                             console.print(
-                                f"[red]Maximum retry attempts ({max_retries}) "
-                                "reached.[/red]"
+                                f"[red]Maximum retry attempts ({max_retries}) " "reached.[/red]"
                             )
                             return None
                         console.print("[yellow]Please try again.[/yellow]\n")
@@ -257,8 +250,7 @@ def select_model_at_startup(
                     retry_count += 1
                     if retry_count >= max_retries:
                         console.print(
-                            f"[red]Maximum retry attempts ({max_retries}) "
-                            "reached.[/red]"
+                            f"[red]Maximum retry attempts ({max_retries}) " "reached.[/red]"
                         )
                         return None
                     console.print("[yellow]Please try again.[/yellow]\n")
@@ -269,8 +261,7 @@ def select_model_at_startup(
                 retry_count += 1
                 if retry_count >= max_retries:
                     console.print(
-                        f"[yellow]Maximum retry attempts ({max_retries}) "
-                        "reached.[/yellow]"
+                        f"[yellow]Maximum retry attempts ({max_retries}) " "reached.[/yellow]"
                     )
                     return None
                 continue

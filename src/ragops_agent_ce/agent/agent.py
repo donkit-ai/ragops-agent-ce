@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Literal
 
@@ -72,10 +72,13 @@ class LLMAgent:
         self.local_tools = tools or default_tools()
         self.mcp_clients = mcp_clients or []
         self.mcp_tools: dict[str, tuple[dict, MCPClient]] = {}
+        self.max_iterations = max_iterations
 
+    async def _ainit_mcp_tools(self) -> None:
+        """Initialize MCP tools asynchronously. Call this after creating the agent."""
         for client in self.mcp_clients:
             try:
-                discovered = client.list_tools()
+                discovered = await client._alist_tools()
                 for t in discovered:
                     tool_name = t["name"]
                     # t["parameters"] = _clean_schema_for_vertex(t["parameters"])
@@ -85,7 +88,6 @@ class LLMAgent:
                     f"Failed to list tools from MCP client {client.command}", exc_info=True
                 )
                 pass
-        self.max_iterations = max_iterations
 
     def _tool_specs(self) -> list[ToolSpec]:
         specs = [t.to_tool_spec() for t in self.local_tools]
@@ -137,7 +139,7 @@ class LLMAgent:
             logger.error(f"Failed to parse tool arguments: {e}")
             return {}
 
-    def _execute_tool_call(self, tc, args: dict) -> str:
+    async def _aexecute_tool_call(self, tc, args: dict) -> str:
         """Execute either a local or MCP tool and return a serialized string result.
 
         Raises on execution error, matching previous behavior.
@@ -153,16 +155,15 @@ class LLMAgent:
                 logger.debug(f"Local tool {tc.function.name} result: {str(result)[:200]}...")
             elif mcp_tool_info:
                 tool_meta, client = mcp_tool_info
-                result = client.call_tool(tool_meta["name"], args)
+                result = await client._acall_tool(tool_meta["name"], args)
                 logger.debug(f"MCP tool {tc.function.name} result: {str(result)[:200]}...")
             else:
                 result = f"Error: Tool '{tc.function.name}' not found or MCP client not configured."
                 logger.error(result)
 
         except Exception as e:
-            result = f"MALFORMED_FUNCTION_CALL: Error executing tool '{tc.function.name}': {e}"
             logger.error(f"Tool execution error: {e}", exc_info=True)
-            raise  # Re-raise to handle in respond_stream
+            raise
 
         return self._serialize_tool_result(result)
 
@@ -176,7 +177,7 @@ class LLMAgent:
             logger.error(f"Failed to serialize tool result to JSON: {e}")
             return str(result)
 
-    def _handle_tool_calls(self, messages: list[Message], tool_calls) -> None:
+    async def _ahandle_tool_calls(self, messages: list[Message], tool_calls) -> None:
         """Full tool call handling: synthetic assistant turn, execute, and append tool messages."""
         logger.debug(f"Processing {len(tool_calls)} tool calls")
         # 1) synthetic assistant turns
@@ -184,7 +185,7 @@ class LLMAgent:
         # 2) execute and append responses
         for tc in tool_calls:
             args = self._parse_tool_args(tc)
-            result_str = self._execute_tool_call(tc, args)
+            result_str = await self._aexecute_tool_call(tc, args)
             messages.append(
                 Message(
                     role="tool",
@@ -194,24 +195,27 @@ class LLMAgent:
                 )
             )
 
-    def chat(self, *, prompt: str, system: str | None = None, model: str | None = None) -> str:
+    async def achat(
+        self, *, prompt: str, system: str | None = None, model: str | None = None
+    ) -> str:
         messages: list[Message] = []
         if system:
             messages.append(Message(role="system", content=system))
         messages.append(Message(role="user", content=prompt))
-        return self.respond(messages, model=model)
+        return await self.arespond(messages, model=model)
 
-    def chat_stream(
+    async def achat_stream(
         self, *, prompt: str, system: str | None = None, model: str | None = None
-    ) -> Iterator[str]:
+    ) -> AsyncIterator[str]:
         """Chat with streaming output. Yields text chunks."""
         messages: list[Message] = []
         if system:
             messages.append(Message(role="system", content=system))
         messages.append(Message(role="user", content=prompt))
-        yield from self.respond_stream(messages, model=model)
+        async for chunk in self.arespond_stream(messages, model=model):
+            yield chunk
 
-    def respond(self, messages: list[Message], *, model: str | None = None) -> str:
+    async def arespond(self, messages: list[Message], *, model: str | None = None) -> str:
         """Perform a single assistant turn given an existing message history.
 
         This method mutates the provided messages list by appending tool results as needed.
@@ -224,7 +228,7 @@ class LLMAgent:
 
             # Handle tool calls if requested
             if self._should_execute_tools(resp):
-                self._handle_tool_calls(messages, resp.tool_calls)
+                await self._ahandle_tool_calls(messages, resp.tool_calls)
                 # continue loop to give tool results back to the model
                 continue
 
@@ -236,20 +240,20 @@ class LLMAgent:
 
         return ""
 
-    def respond_stream(
+    async def arespond_stream(
         self, messages: list[Message], *, model: str | None = None
-    ) -> Iterator[StreamEvent]:
+    ) -> AsyncIterator[StreamEvent]:
         """Perform a single assistant turn with streaming output.
 
         This method mutates the provided messages list by appending tool results as needed.
         Yields StreamEvent objects for content chunks and tool calls.
 
         Returns:
-            Iterator that yields StreamEvent objects.
+            AsyncIterator that yields StreamEvent objects.
         """
         if not self.provider.supports_streaming():
             # Yield the full response as a single content event
-            yield StreamEvent(type="content", content=self.respond(messages, model=model))
+            yield StreamEvent(type="content", content=await self.arespond(messages, model=model))
             return
 
         tools = self._tool_specs() if self.provider.supports_tools() else None
@@ -276,7 +280,7 @@ class LLMAgent:
 
                         try:
                             # Execute tool
-                            result_str = self._execute_tool_call(tc, args)
+                            result_str = await self._aexecute_tool_call(tc, args)
                             # Add tool result to messages
                             messages.append(
                                 Message(
