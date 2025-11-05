@@ -212,10 +212,18 @@ async def vectorstore_load(
 
                     # Report batch progress
                     if total_batches > 1:
-                        batch_msg = f"  Batch {batch_idx + 1}/{total_batches} ({len(batch)} chunks)"
+                        if total_files > 1:
+                            batch_msg = (
+                                f"File {file_idx}/{total_files} - "
+                                f"Batch {batch_idx + 1}/{total_batches} ({len(batch)} chunks)"
+                            )
+                        else:
+                            batch_msg = (
+                                f"Batch {batch_idx + 1}/{total_batches} ({len(batch)} chunks)"
+                            )
                         await ctx.report_progress(
-                            progress=file_idx,
-                            total=total_files,
+                            progress=batch_idx + 1,
+                            total=total_batches,
                             message=batch_msg,
                         )
 

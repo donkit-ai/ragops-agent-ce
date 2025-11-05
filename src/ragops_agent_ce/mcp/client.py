@@ -172,7 +172,7 @@ class MCPClient:
         client = Client(transport, progress_handler=self.__progress_handler)
         async with client:
             # FastMCP wraps Pydantic models in {"args": <model>}, so wrap arguments
-            wrapped_args = {"args": arguments}
+            wrapped_args = {"args": arguments} if arguments else None
             logger.debug(f"Wrapped arguments for {name}: {wrapped_args}")
             result = await client.call_tool(name, wrapped_args)
             # FastMCP returns ToolResult with content and optional data

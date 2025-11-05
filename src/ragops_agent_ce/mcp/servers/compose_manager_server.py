@@ -445,6 +445,12 @@ async def init_project_compose(args: InitProjectComposeArgs) -> str:
     return json.dumps(result, indent=2)
 
 
+class ListContainersArgs(BaseModel):
+    """Empty args model for list_containers (FastMCP requires args parameter)."""
+
+    pass
+
+
 @server.tool(
     name="list_containers",
     description=(
@@ -452,11 +458,11 @@ async def init_project_compose(args: InitProjectComposeArgs) -> str:
         "if want to analyze whether container from another project occupies the same port"
     ),
 )
-async def list_containers() -> str:
+async def list_containers(args: ListContainersArgs) -> str:
     """List Docker containers."""
     try:
         result = subprocess.run(
-            ["docker", "ps", "--format", "{{json .}}"],
+            ["docker", "ps", "--format", r"{{json .}}"],
             capture_output=True,
             text=True,
             timeout=10,
