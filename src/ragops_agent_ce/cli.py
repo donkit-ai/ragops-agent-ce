@@ -58,6 +58,8 @@ from .llm.provider_factory import get_provider
 from .llm.types import Message
 from .logging_config import setup_logging
 from .mcp.client import MCPClient
+from .model_selector import save_model_selection
+from .model_selector import select_model_at_startup
 from .prints import RAGOPS_LOGO_ART
 from .prints import RAGOPS_LOGO_TEXT
 from .setup_wizard import run_setup_if_needed
@@ -76,26 +78,26 @@ def version_callback(value: bool) -> None:
 
 @app.callback(invoke_without_command=True)
 def main(
-    ctx: typer.Context,
-    setup: bool = typer.Option(
-        False,
-        "--setup",
-        help="Run setup wizard to configure the agent",
-    ),
-    system: str | None = typer.Option(
-        None, "--system", "-s", help="System prompt to guide the agent"
-    ),
-    model: str | None = typer.Option(
-        None, "--model", "-m", help="LLM model to use (overrides settings)"
-    ),
-    provider: str | None = typer.Option(
-        None, "--provider", "-p", help="LLM provider to use (overrides .env settings)"
-    ),
-    show_checklist: bool = typer.Option(
-        True,
-        "--show-checklist/--no-checklist",
-        help="Render checklist panel at start and after each step",
-    ),
+        ctx: typer.Context,
+        setup: bool = typer.Option(
+            False,
+            "--setup",
+            help="Run setup wizard to configure the agent",
+        ),
+        system: str | None = typer.Option(
+            None, "--system", "-s", help="System prompt to guide the agent"
+        ),
+        model: str | None = typer.Option(
+            None, "--model", "-m", help="LLM model to use (overrides settings)"
+        ),
+        provider: str | None = typer.Option(
+            None, "--provider", "-p", help="LLM provider to use (overrides .env settings)"
+        ),
+        show_checklist: bool = typer.Option(
+            True,
+            "--show-checklist/--no-checklist",
+            help="Render checklist panel at start and after each step",
+        ),
 ) -> None:
     """RagOps Agent CE - LLM-powered CLI agent for building RAG pipelines."""
     # Setup logging according to .env / settings
@@ -115,10 +117,25 @@ def main(
         if setup:
             raise typer.Exit(code=0)
 
+        # Model selection at startup (mandatory)
+        # Only skip if provider is explicitly provided via CLI flag
+        if provider is None:
+            model_selection = select_model_at_startup()
+            if model_selection is None:
+                console.print("[red]Model selection cancelled. Exiting.[/red]")
+                raise typer.Exit(code=1)
+            provider, model_from_selection = model_selection
+            # Override model from selection if not provided via CLI
+            if model is None:
+                model = model_from_selection
+        else:
+            # Provider provided via CLI, save it to KV database as latest
+            save_model_selection(provider, model)
+
         asyncio.run(
             _astart_repl(
                 system=system or VERTEX_SYSTEM_PROMPT
-                if provider == "vertexai"
+                if provider == "vertex" or provider == "vertexai"
                 else OPENAI_SYSTEM_PROMPT,
                 model=model,
                 provider=provider,
@@ -177,13 +194,13 @@ def _render_markdown_to_rich(text: str) -> str:
 
 
 async def _astart_repl(
-    *,
-    system: str | None,
-    model: str | None,
-    provider: str | None,
-    mcp_commands: list[str] | None,
-    mcp_only: bool,
-    show_checklist: bool,
+        *,
+        system: str | None,
+        model: str | None,
+        provider: str | None,
+        mcp_commands: list[str] | None,
+        mcp_only: bool,
+        show_checklist: bool,
 ) -> None:
     console.print(RAGOPS_LOGO_TEXT)
     console.print(RAGOPS_LOGO_ART)
@@ -192,7 +209,14 @@ async def _astart_repl(
     if provider:
         os.environ.setdefault("RAGOPS_LLM_PROVIDER", provider)
         settings = settings.model_copy(update={"llm_provider": provider})
-    prov = get_provider(settings)
+
+    # Try to get provider and validate credentials
+    try:
+        prov = get_provider(settings, llm_provider=provider)
+    except (ValueError, FileNotFoundError, json.JSONDecodeError) as e:
+        console.print(f"[red]Error initializing provider '{provider}':[/red] {e}")
+        console.print("[yellow]Please ensure credentials are configured correctly.[/yellow]")
+        raise typer.Exit(code=1)
 
     tools = [] if mcp_only else default_tools()
 
@@ -277,7 +301,7 @@ async def _astart_repl(
 
     # Stream event handler: returns updated (reply, display_content, temp_executing)
     def _process_stream_event(
-        event, reply: str, display_content: str, temp_executing: str
+            event, reply: str, display_content: str, temp_executing: str
     ) -> tuple[str, str, str]:
         nonlocal progress_line_index
         et = getattr(event, "type", None)
@@ -421,7 +445,7 @@ async def _astart_repl(
 
         if user_input.startswith(":agent "):
             _render_current_screen(show_input_space=False)
-            parts = user_input[len(":agent ") :].strip().split("/", 1)
+            parts = user_input[len(":agent "):].strip().split("/", 1)
             if len(parts) != 2:
                 transcript.append("[bold red]Error:[/bold red] Invalid agent command format.")
                 continue
