@@ -95,38 +95,88 @@ class InteractiveInputBox:
         self.last_blink = time.time()
         self.blink_interval = 0.5  # seconds
 
+    def _get_cursor_position(self, text: str, cursor: int) -> tuple[int, int]:
+        """Get cursor position as (line, column) from absolute cursor position."""
+        lines = text[:cursor].split("\n")
+        line = len(lines) - 1
+        column = len(lines[-1]) if lines else 0
+        return line, column
+
+    def _get_text_lines(self, text: str) -> list[str]:
+        """Split text into lines, handling empty text."""
+        if not text:
+            return [""]
+        return text.split("\n")
+
+    def _calculate_panel_height(self, text: str) -> int:
+        """Calculate panel height based on number of lines."""
+        lines = self._get_text_lines(text)
+        num_lines = len(lines)
+        # Base height: 3 (border + padding), plus 1 for each line of text
+        # Add extra height for prompt and hint text if empty
+        if not text:
+            height = 5  # Space for prompt, hint, and cursor
+        else:
+            # 1 for top padding, 1 for bottom padding, plus lines of text
+            height = max(4, num_lines + 3)
+        # Cap at reasonable maximum
+        return min(height, 25)
+
     def _create_input_panel(self, text: str, cursor: int, show_cursor: bool) -> Panel:
-        """Create input panel with current text and cursor."""
+        """Create input panel with current text and cursor, supporting multiline."""
         content = Text()
         content.append("you", style="bold blue")
         content.append("> ", style="bold blue")
 
-        if cursor < len(text):
-            content.append(text[:cursor], style="white")
-            if show_cursor:
-                # Blinking cursor
-                content.append(text[cursor], style="black on white")
-            else:
-                content.append(text[cursor], style="white")
-            content.append(text[cursor + 1 :], style="white")
-        elif not text:
+        lines = self._get_text_lines(text)
+        line, col = self._get_cursor_position(text, cursor)
+
+        if not text:
+            # Empty text placeholder
             if show_cursor:
                 content.append("T", style="black on white")
                 content.append("ype your message... ", style="dim")
             else:
                 content.append("Type your message... ", style="dim")
-            content.append("(:q to quit, :help to list commands)", style="yellow dim")
+            content.append("(Ctrl+D to submit, Enter for newline, :q to quit, :help to list commands)", style="yellow dim")
         else:
-            content.append(text, style="white")
-            if show_cursor:
-                content.append("█", style="white")
+            # Render multiline text with cursor
+            for line_idx, line_text in enumerate(lines):
+                if line_idx > 0:
+                    # New line - add continuation indicator
+                    content.append("\n")
+                    content.append("└─ ", style="dim cyan")  # Visual continuation indicator
+
+                if line_idx == line:
+                    # Current line with cursor
+                    if col < len(line_text):
+                        # Cursor in middle of line
+                        content.append(line_text[:col], style="white")
+                        if show_cursor:
+                            content.append(line_text[col], style="black on white")
+                        else:
+                            content.append(line_text[col], style="white")
+                        content.append(line_text[col + 1 :], style="white")
+                    else:
+                        # Cursor at end of line
+                        content.append(line_text, style="white")
+                        if show_cursor:
+                            content.append("█", style="white")
+                        else:
+                            content.append(" ", style="white")  # Space for cursor
+                else:
+                    # Other lines without cursor
+                    content.append(line_text, style="dim white")
+
+        # Calculate dynamic height
+        height = self._calculate_panel_height(text)
 
         return Panel(
             content,
             title="[dim]Input[/dim]",
             title_align="center",
             border_style="white",
-            height=3,
+            height=height,
             expand=True,
         )
 
@@ -176,12 +226,22 @@ class InteractiveInputBox:
                     else:
                         continue
 
-                    if char in ("\r", "\n"):  # Enter
-                        break
+                    # Handle Enter key - Enter inserts newline, Ctrl+D submits
+                    if char in ("\r", "\n"):
+                        # Enter inserts newline (multiline support)
+                        self.current_text = (
+                            self.current_text[: self.cursor_pos]
+                            + "\n"
+                            + self.current_text[self.cursor_pos :]
+                        )
+                        self.cursor_pos += 1
                     elif char == "\x03":  # Ctrl+C
                         raise KeyboardInterrupt
-                    elif char == "\x04":  # Ctrl+D
-                        raise KeyboardInterrupt
+                    elif char == "\x04":  # Ctrl+D - submit
+                        if self.current_text.strip():
+                            break
+                        else:
+                            raise KeyboardInterrupt
                     elif char in ("\x7f", "\b"):  # Backspace
                         if self.cursor_pos > 0:
                             self.current_text = (
@@ -189,15 +249,57 @@ class InteractiveInputBox:
                                 + self.current_text[self.cursor_pos :]
                             )
                             self.cursor_pos -= 1
-                    elif char == "\x1b":  # Arrows
+                    elif char == "\x1b":  # Escape sequence (arrows, etc.)
                         next1 = sys.stdin.read(1)
-                        next2 = sys.stdin.read(1)
+                        if next1 == "":  # Just Escape key
+                            continue
+                        next2 = sys.stdin.read(1) if next1 == "[" else ""
                         if next1 == "[":
-                            if next2 == "D" and self.cursor_pos > 0:
-                                self.cursor_pos -= 1
-                            elif next2 == "C" and self.cursor_pos < len(self.current_text):
-                                self.cursor_pos += 1
-                    elif len(char) == 1 and ord(char) >= 32:
+                            if next2 == "D":  # Left arrow
+                                if self.cursor_pos > 0:
+                                    # Check if we're at the start of a line (after newline)
+                                    if self.cursor_pos > 0 and self.current_text[self.cursor_pos - 1] == "\n":
+                                        # Already at start of line, move to end of previous line
+                                        line, col = self._get_cursor_position(self.current_text, self.cursor_pos)
+                                        if line > 0:
+                                            lines = self._get_text_lines(self.current_text)
+                                            prev_line = lines[line - 1]
+                                            self.cursor_pos = sum(len(l) + 1 for l in lines[:line-1]) + len(prev_line)
+                                    else:
+                                        self.cursor_pos -= 1
+                            elif next2 == "C":  # Right arrow
+                                if self.cursor_pos < len(self.current_text):
+                                    # Check if we're at the end of a line (before newline)
+                                    if self.current_text[self.cursor_pos] == "\n":
+                                        # Move to start of next line
+                                        self.cursor_pos += 1
+                                    else:
+                                        self.cursor_pos += 1
+                            elif next2 == "A":  # Up arrow
+                                # Move cursor up one line
+                                line, col = self._get_cursor_position(self.current_text, self.cursor_pos)
+                                if line > 0:
+                                    lines = self._get_text_lines(self.current_text)
+                                    prev_line = lines[line - 1]
+                                    # Move to same column in previous line, or end of line if shorter
+                                    target_col = min(col, len(prev_line))
+                                    # Calculate new absolute position: sum of all characters before target line
+                                    self.cursor_pos = sum(len(l) + 1 for l in lines[:line-1]) + target_col
+                            elif next2 == "B":  # Down arrow
+                                # Move cursor down one line
+                                line, col = self._get_cursor_position(self.current_text, self.cursor_pos)
+                                lines = self._get_text_lines(self.current_text)
+                                if line < len(lines) - 1:
+                                    next_line = lines[line + 1]
+                                    # Move to same column in next line, or end of line if shorter
+                                    target_col = min(col, len(next_line))
+                                    # Calculate new absolute position: sum of all characters before target line
+                                    self.cursor_pos = sum(len(l) + 1 for l in lines[:line+1]) + target_col
+                            elif next2 == "\r":  # Esc+Enter = submit
+                                break
+                    elif char == "\x0a" or char == "\x0d":  # Already handled above
+                        pass
+                    elif len(char) == 1 and ord(char) >= 32:  # Printable characters
                         self.current_text = (
                             self.current_text[: self.cursor_pos]
                             + char
