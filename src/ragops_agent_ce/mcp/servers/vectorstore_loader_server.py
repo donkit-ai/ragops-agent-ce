@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from donkit.embeddings import get_vertexai_embeddings
 from donkit.vectorstore_loader import create_vectorstore_loader
+from fastmcp import Context
 from fastmcp import FastMCP
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -97,7 +98,6 @@ class VectorstoreLoadArgs(BaseModel):
 
 server = FastMCP(
     "rag-vectorstore-loader",
-    log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
 )
 
 
@@ -112,9 +112,11 @@ server = FastMCP(
     ),
 )
 async def vectorstore_load(
-    chunks_path: str,
-    params: VectorstoreParams,
+    args: VectorstoreLoadArgs,
+    ctx: Context,
 ) -> str:
+    chunks_path = args.chunks_path
+    params = args.params
     if "localhost" not in params.database_uri:
         return (
             "Error: database URI must be outside "
@@ -166,7 +168,8 @@ async def vectorstore_load(
     successful_files: list[tuple[str, int]] = []  # (filename, chunk_count)
     failed_files: list[tuple[str, str]] = []  # (filename, error_message)
 
-    for file in json_files:
+    total_files = len(json_files)
+    for file_idx, file in enumerate(json_files, start=1):
         try:
             # Read and parse JSON file
             with file.open("r", encoding="utf-8") as f:
@@ -194,12 +197,43 @@ async def vectorstore_load(
                 continue
 
             try:
-                task_id = uuid4()
-                loader.load_documents(task_id=task_id, documents=documents)
-
+                # Load documents in batches of 100 to avoid memory issues with large files
+                batch_size = 500
                 chunk_count = len(documents)
+                total_batches = (chunk_count + batch_size - 1) // batch_size
+
+                for batch_idx in range(total_batches):
+                    start_idx = batch_idx * batch_size
+                    end_idx = min(start_idx + batch_size, chunk_count)
+                    batch = documents[start_idx:end_idx]
+
+                    task_id = uuid4()
+                    loader.load_documents(task_id=task_id, documents=batch)
+
+                    # Report batch progress
+                    if total_batches > 1:
+                        batch_msg = f"  Batch {batch_idx + 1}/{total_batches} ({len(batch)} chunks)"
+                        await ctx.report_progress(
+                            progress=file_idx,
+                            total=total_files,
+                            message=batch_msg,
+                        )
+
                 total_chunks_loaded += chunk_count
                 successful_files.append((file.name, chunk_count))
+
+                # Report file progress
+                percentage = (file_idx / total_files) * 100
+                msg = (
+                    f"{file_idx}/{total_files} files ({percentage:.1f}%) - "
+                    f"{file.name}: {chunk_count} chunks loaded"
+                )
+                print(msg)
+                await ctx.report_progress(
+                    progress=file_idx,
+                    total=total_files,
+                    message=msg,
+                )
 
             except Exception as e:
                 failed_files.append((file.name, f"vectorstore error: {str(e)}"))
@@ -240,7 +274,11 @@ async def vectorstore_load(
 
 
 def main() -> None:
-    server.run(transport="stdio")
+    server.run(
+        transport="stdio",
+        log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
+        show_banner=False,
+    )
 
 
 if __name__ == "__main__":

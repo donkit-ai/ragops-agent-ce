@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 from donkit.read_engine.read_engine import DonkitReader
+from fastmcp import Context
 from fastmcp import FastMCP
 from loguru import logger
 from pydantic import BaseModel
@@ -37,7 +38,6 @@ class ProcessDocumentsArgs(BaseModel):
 
 server = FastMCP(
     "rag-read-engine",
-    log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
 
 
@@ -53,7 +53,7 @@ server = FastMCP(
         "Don't use this tool to get documents content! It returns only path to processed directory."
     ).strip(),
 )
-async def process_documents(args: ProcessDocumentsArgs) -> str:
+async def process_documents(args: ProcessDocumentsArgs, ctx: Context) -> str:
     """Process documents from source directory, file, or file list using DonkitReader.
 
     This tool converts various document formats to text-based formats that can be
@@ -64,7 +64,27 @@ async def process_documents(args: ProcessDocumentsArgs) -> str:
     logger.debug(f"source_path type: {type(args.source_path)}, value: {repr(args.source_path)}")
     logger.debug(f"project_id: {args.project_id}")
 
-    reader = DonkitReader(use_llm=args.use_llm)
+    # Get current event loop to use in callback (from worker threads)
+    import asyncio
+
+    main_loop = asyncio.get_event_loop()
+
+    # Create progress callback for DonkitReader
+    def progress_callback(current: int, total: int, message: str | None = None) -> None:
+        """Callback for reporting progress from DonkitReader.
+
+        This callback is called from worker threads, so we need to schedule
+        the coroutine in the main event loop.
+        """
+        try:
+            # Schedule coroutine to be run in the main event loop
+            asyncio.run_coroutine_threadsafe(
+                ctx.report_progress(progress=current, total=total, message=message), main_loop
+            )
+        except Exception as e:
+            logger.debug(f"Failed to report progress: {e}")
+
+    reader = DonkitReader(use_llm=args.use_llm, progress_callback=progress_callback)
     logger.debug(reader.readers)
     supported_extensions = set(reader.readers.keys())
 
@@ -170,11 +190,14 @@ async def process_documents(args: ProcessDocumentsArgs) -> str:
     failed_files: list[dict[str, str]] = []
 
     # Process each file - DonkitReader will save directly to project directory
+    # Progress reporting is now handled internally by DonkitReader for PDF pages
     for file_path in files_to_process:
         try:
             logger.info(f"Processing file: {file_path}")
+
             # Pass output_dir to save directly to project directory (no moving needed)
-            output_path = reader.read_document(
+            # Use async version for better performance
+            output_path = await reader.aread_document(
                 str(file_path),
                 output_type=args.output_type,  # type: ignore
                 output_dir=str(project_output_dir),
@@ -225,7 +248,11 @@ async def process_documents(args: ProcessDocumentsArgs) -> str:
 
 
 def main() -> None:
-    server.run(transport="stdio")
+    server.run(
+        transport="stdio",
+        log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
+        show_banner=False,
+    )
 
 
 if __name__ == "__main__":

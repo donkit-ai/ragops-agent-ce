@@ -20,7 +20,6 @@ class SearchQueryArgs(BaseModel):
 
 server = FastMCP(
     "rag-query",
-    log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
 
 
@@ -142,7 +141,11 @@ async def get_rag_prompt(args: SearchQueryArgs) -> str:
 
 
 def main() -> None:
-    server.run(transport="stdio")
+    server.run(
+        transport="stdio",
+        log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
+        show_banner=False,
+    )
 
 
 if __name__ == "__main__":

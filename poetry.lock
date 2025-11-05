@@ -1336,22 +1336,24 @@ files = [
 
 [[package]]
 name = "donkit-chunker"
-version = "0.1.2"
+version = "0.1.3"
 description = "Chunking utilities for Donkit RagOps pipelines"
 optional = false
-python-versions = "<4.0,>=3.12"
-groups = ["main"]
+python-versions = "^3.12"
+groups = ["main", "dev"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
-files = [
-    {file = "donkit_chunker-0.1.2-py3-none-any.whl", hash = "sha256:d1311795a9d5023dda2f91e45dcce13894ab6eacb5b5c3a7e5ce69791cf80b3c"},
-    {file = "donkit_chunker-0.1.2.tar.gz", hash = "sha256:729f07a51b5e0d706b2f6238c3163e8020ce4ce819f2a2808de692da20791298"},
-]
+files = []
+develop = true
 
 [package.dependencies]
-langchain-core = ">=0.3.27,<0.4.0"
-langchain-text-splitters = ">=0.3.0,<0.4.0"
-loguru = ">=0.7.3,<0.8.0"
-pydantic = ">=2.7.4,<3.0.0"
+langchain-core = "^0.3.27"
+langchain-text-splitters = "^0.3.0"
+loguru = "^0.7.3"
+pydantic = "^2.7.4"
+
+[package.source]
+type = "directory"
+url = "../ragops-agent/shared/chunker"
 
 [[package]]
 name = "donkit-embeddings"
@@ -1373,7 +1375,7 @@ openai = ">=2.1.0,<3.0.0"
 
 [[package]]
 name = "donkit-read-engine"
-version = "0.2.0"
+version = "0.2.1"
 description = "Document loading helpers for Donkit RagOps"
 optional = false
 python-versions = "^3.12"
@@ -2814,7 +2816,7 @@ version = "1.33"
 description = "Apply JSON-Patches (RFC 6902)"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, !=3.6.*"
-groups = ["main"]
+groups = ["main", "dev"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
     {file = "jsonpatch-1.33-py2.py3-none-any.whl", hash = "sha256:0ae28c0cd062bbd8b8ecc26d7d164fbbea9652a1a3693f3b956c1eae5145dade"},
@@ -2843,7 +2845,7 @@ version = "3.0.0"
 description = "Identify specific nodes in a JSON document (RFC 6901)"
 optional = false
 python-versions = ">=3.7"
-groups = ["main"]
+groups = ["main", "dev"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
     {file = "jsonpointer-3.0.0-py2.py3-none-any.whl", hash = "sha256:13e088adc14fca8b6aa8177c044e12701e6ad4b28ff10e65f2267a90109c9942"},
@@ -3169,7 +3171,7 @@ version = "0.3.79"
 description = "Building applications with LLMs through composability"
 optional = false
 python-versions = "<4.0.0,>=3.9.0"
-groups = ["main"]
+groups = ["main", "dev"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
     {file = "langchain_core-0.3.79-py3-none-any.whl", hash = "sha256:92045bfda3e741f8018e1356f83be203ec601561c6a7becfefe85be5ddc58fdb"},
@@ -3209,7 +3211,7 @@ version = "0.3.11"
 description = "LangChain text splitting utilities"
 optional = false
 python-versions = ">=3.9"
-groups = ["main"]
+groups = ["main", "dev"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
     {file = "langchain_text_splitters-0.3.11-py3-none-any.whl", hash = "sha256:cf079131166a487f1372c8ab5d0bfaa6c0a4291733d9c43a34a16ac9bcd6a393"},
@@ -3241,7 +3243,7 @@ version = "0.4.37"
 description = "Client library to connect to the LangSmith LLM Tracing and Evaluation Platform."
 optional = false
 python-versions = ">=3.9"
-groups = ["main"]
+groups = ["main", "dev"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
     {file = "langsmith-0.4.37-py3-none-any.whl", hash = "sha256:e34a94ce7277646299e4703a0f6e2d2c43647a28e8b800bb7ef82fd87a0ec766"},
@@ -3701,15 +3703,15 @@ dev = ["meson-python (>=0.13.1,<0.17.0)", "pybind11 (>=2.13.2,!=2.13.3)", "setup
 
 [[package]]
 name = "mcp"
-version = "1.20.0"
+version = "1.18.0"
 description = "Model Context Protocol SDK"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
-    {file = "mcp-1.20.0-py3-none-any.whl", hash = "sha256:d0dc06f93653f7432ff89f694721c87f79876b6f93741bf628ad1e48f7ac5e5d"},
-    {file = "mcp-1.20.0.tar.gz", hash = "sha256:9ccc09eaadbfbcbbdab1c9723cfe2e0d1d9e324d7d3ce7e332ef90b09ed35177"},
+    {file = "mcp-1.18.0-py3-none-any.whl", hash = "sha256:42f10c270de18e7892fdf9da259029120b1ea23964ff688248c69db9d72b1d0a"},
+    {file = "mcp-1.18.0.tar.gz", hash = "sha256:aa278c44b1efc0a297f53b68df865b988e52dd08182d702019edcf33a8e109f6"},
 ]
 
 [package.dependencies]
@@ -3719,7 +3721,6 @@ httpx-sse = ">=0.4"
 jsonschema = ">=4.20.0"
 pydantic = ">=2.11.0,<3.0.0"
 pydantic-settings = ">=2.5.2"
-pyjwt = {version = ">=2.10.1", extras = ["crypto"]}
 python-multipart = ">=0.0.9"
 pywin32 = {version = ">=310", markers = "sys_platform == \"win32\""}
 sse-starlette = ">=1.6.1"
@@ -4931,8 +4932,7 @@ version = "3.11.3"
 description = "Fast, correct Python JSON library supporting dataclasses, datetimes, and numpy"
 optional = false
 python-versions = ">=3.9"
-groups = ["main"]
-markers = "python_version == \"3.12\" or python_version >= \"3.13\""
+groups = ["main", "dev"]
 files = [
     {file = "orjson-3.11.3-cp310-cp310-macosx_10_15_x86_64.macosx_11_0_arm64.macosx_10_15_universal2.whl", hash = "sha256:29cb1f1b008d936803e2da3d7cba726fc47232c45df531b29edf0b232dd737e7"},
     {file = "orjson-3.11.3-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:97dceed87ed9139884a55db8722428e27bd8452817fbf1869c58b49fecab1120"},
@@ -5018,6 +5018,7 @@ files = [
     {file = "orjson-3.11.3-cp39-cp39-win_amd64.whl", hash = "sha256:215c595c792a87d4407cb72dd5e0f6ee8e694ceeb7f9102b533c5a9bf2a916bb"},
     {file = "orjson-3.11.3.tar.gz", hash = "sha256:1c0603b1d2ffcd43a411d64797a19556ef76958aef1c182f22dc30860152a98a"},
 ]
+markers = {main = "python_version == \"3.12\" or python_version >= \"3.13\"", dev = "(python_version == \"3.12\" or python_version >= \"3.13\") and platform_python_implementation != \"PyPy\""}
 
 [[package]]
 name = "overrides"
@@ -6449,28 +6450,6 @@ files = [
 windows-terminal = ["colorama (>=0.4.6)"]
 
 [[package]]
-name = "pyjwt"
-version = "2.10.1"
-description = "JSON Web Token implementation in Python"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-markers = "python_version == \"3.12\" or python_version >= \"3.13\""
-files = [
-    {file = "PyJWT-2.10.1-py3-none-any.whl", hash = "sha256:dcdd193e30abefd5debf142f9adfcdd2b58004e644f25406ffaebd50bd98dacb"},
-    {file = "pyjwt-2.10.1.tar.gz", hash = "sha256:3cc5772eb20009233caf06e9d8a0577824723b44e6648ee0a2aedb6cf9381953"},
-]
-
-[package.dependencies]
-cryptography = {version = ">=3.4.0", optional = true, markers = "extra == \"crypto\""}
-
-[package.extras]
-crypto = ["cryptography (>=3.4.0)"]
-dev = ["coverage[toml] (==5.0.4)", "cryptography (>=3.4.0)", "pre-commit", "pytest (>=6.0.0,<7.0.0)", "sphinx", "sphinx-rtd-theme", "zope.interface"]
-docs = ["sphinx", "sphinx-rtd-theme", "zope.interface"]
-tests = ["coverage[toml] (==5.0.4)", "pytest (>=6.0.0,<7.0.0)"]
-
-[[package]]
 name = "pylatexenc"
 version = "2.10"
 description = "Simple LaTeX parser providing latex-to-unicode and unicode-to-latex conversion"
@@ -7391,7 +7370,7 @@ version = "1.0.0"
 description = "A utility belt for advanced users of python-requests"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
-groups = ["main"]
+groups = ["main", "dev"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
     {file = "requests-toolbelt-1.0.0.tar.gz", hash = "sha256:7681a0a3d047012b5bdc0ee37d7f8f07ebe76ab08caeccfc3921ce23c88d5bc6"},
@@ -9507,7 +9486,7 @@ version = "0.25.0"
 description = "Zstandard bindings for Python"
 optional = false
 python-versions = ">=3.9"
-groups = ["main"]
+groups = ["main", "dev"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
     {file = "zstandard-0.25.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:e59fdc271772f6686e01e1b3b74537259800f57e24280be3f29c8a0deb1904dd"},
@@ -9617,4 +9596,4 @@ cffi = ["cffi (>=1.17,<2.0)", "cffi (>=2.0.0b)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "e550dd2964652e462dd1191e4327deb0b08aece98e75bac5ee6f12dc3cf1c966"
+content-hash = "e7738e40fef5b0eaafb09909a21f4bede087d19275715b565a5184c2af29364c"

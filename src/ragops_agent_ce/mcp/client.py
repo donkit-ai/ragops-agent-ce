@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +35,8 @@ def _load_env_for_mcp() -> dict[str, str | None]:
             env.update(dotenv_values(cwd_path))
             env_loaded = True
             logger.debug(f"Loaded MCP env from {cwd_path}")
-
+        if env_loaded:
+            break
         # 2. Parent directories (walk up 3 levels)
         parent = Path.cwd()
         for _ in range(4):
@@ -45,7 +47,6 @@ def _load_env_for_mcp() -> dict[str, str | None]:
                 env_loaded = True
                 logger.debug(f"Loaded MCP env from {parent_env}")
                 break
-
         # 3. Fallback to find_dotenv
         if not env_loaded:
             found = find_dotenv(filename=fname, usecwd=True)
@@ -56,7 +57,6 @@ def _load_env_for_mcp() -> dict[str, str | None]:
 
     if not env_loaded:
         logger.debug("No .env file found for MCP server, using current environment only")
-
     return env
 
 
@@ -67,19 +67,44 @@ class MCPClient:
     and protocol operations automatically.
     """
 
-    def __init__(self, command: str, args: list[str] | None = None, timeout: float = 60.0) -> None:
+    def __init__(
+        self,
+        command: str,
+        args: list[str] | None = None,
+        timeout: float = 999.0,
+        progress_callback: Callable[[float, float | None, str | None], None] | None = None,
+    ) -> None:
         """Initialize MCP client.
 
         Args:
             command: Command to run the MCP server (e.g., "python" or "uv")
             args: Command-line arguments including the script path
             timeout: Timeout for operations in seconds
+            progress_callback: Optional callback for progress updates from MCP tools
         """
         self.command = command
         self.args = args or []
         self.timeout = timeout
+        self.progress_callback = progress_callback
         # Load environment variables for the server
         self._env = _load_env_for_mcp()
+
+    async def __progress_handler(
+        self,
+        progress: float,
+        total: float | None,
+        message: str | None,
+    ) -> None:
+        """Handle progress updates from read_engine MCP server."""
+        if self.progress_callback:
+            self.progress_callback(progress, total, message)
+        else:
+            # Fallback to print if no callback provided
+            if total is not None:
+                percentage = (progress / total) * 100
+                print(f"Progress: {percentage:.1f}% - {message or ''}")
+            else:
+                print(f"Progress: {progress} - {message or ''}")
 
     async def _alist_tools(self) -> list[dict]:
         """List available tools from the MCP server."""
@@ -93,7 +118,6 @@ class MCPClient:
         client = Client(transport)
         async with client:
             tools_resp = await client.list_tools()
-            logger.debug(tools_resp)
             tools = []
             for t in tools_resp:
                 # FastMCP returns Tool objects with name, description, and inputSchema (dict)
@@ -102,10 +126,8 @@ class MCPClient:
                     "properties": {},
                     "additionalProperties": True,
                 }
-
                 # Access inputSchema attribute (note: lowercase 's' in input_schema or inputSchema)
                 raw_schema = getattr(t, "inputSchema", None) or getattr(t, "input_schema", None)
-
                 if raw_schema and isinstance(raw_schema, dict):
                     try:
                         # FastMCP wraps Pydantic models in {"args": <model>}
@@ -134,7 +156,6 @@ class MCPClient:
                         "parameters": schema,
                     }
                 )
-            logger.debug(tools)
             return tools
 
     def list_tools(self) -> list[dict]:
@@ -148,7 +169,7 @@ class MCPClient:
         transport = StdioTransport(
             command=self.command, args=self.args, env=self._env, keep_alive=True
         )
-        client = Client(transport)
+        client = Client(transport, progress_handler=self.__progress_handler)
         async with client:
             # FastMCP wraps Pydantic models in {"args": <model>}, so wrap arguments
             wrapped_args = {"args": arguments}

@@ -38,7 +38,6 @@ class Checklist(BaseModel):
 
 server = FastMCP(
     "rag-checklist",
-    log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
 
 
@@ -167,7 +166,11 @@ async def update_checklist_item(args: UpdateChecklistItemArgs) -> str:
 
 
 def main() -> None:
-    server.run(transport="stdio")
+    server.run(
+        transport="stdio",
+        log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
+        show_banner=False,
+    )
 
 
 if __name__ == "__main__":

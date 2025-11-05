@@ -18,6 +18,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Literal
+from typing import Self
 
 from fastmcp import FastMCP
 from pydantic import BaseModel
@@ -182,7 +183,6 @@ def get_compose_command() -> list[str]:
 
 server = FastMCP(
     "ragops-compose-manager",
-    log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
 
 
@@ -301,7 +301,7 @@ class InitProjectComposeArgs(BaseModel):
     rag_config: RagConfig = Field(description="RAG service configuration")
 
     @model_validator(mode="after")
-    def _set_default_collection_name(self) -> "InitProjectComposeArgs":
+    def _set_default_collection_name(self) -> Self:
         """Ensure retriever_options.collection_name is set.
         If missing/empty, use project_id as a sensible default.
         For Milvus, ensure collection name starts with underscore or letter.
@@ -899,9 +899,11 @@ async def get_logs(args: GetLogsArgs) -> str:
 
 
 def main() -> None:
-    """Run the MCP server."""
-    print("Compose manager server starting")
-    server.run(transport="stdio")
+    server.run(
+        transport="stdio",
+        log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
+        show_banner=False,
+    )
 
 
 if __name__ == "__main__":

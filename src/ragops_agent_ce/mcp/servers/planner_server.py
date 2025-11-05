@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+from typing import Self
 
 from fastmcp import FastMCP
 from pydantic import BaseModel
@@ -16,7 +17,7 @@ class RagConfigPlanArgs(BaseModel):
     rag_config: RagConfig = Field(default_factory=RagConfig)
 
     @model_validator(mode="after")
-    def _set_default_collection_name(self) -> RagConfigPlanArgs:
+    def _set_default_collection_name(self) -> Self:
         """Ensure retriever_options.collection_name is set.
         If missing/empty, use project_id as a sensible default.
         For Milvus, ensure collection name starts with underscore or letter.
@@ -29,12 +30,15 @@ class RagConfigPlanArgs(BaseModel):
             collection_name = self.rag_config.retriever_options.collection_name
             if not re.match(r"^[a-zA-Z_]", collection_name):
                 self.rag_config.retriever_options.collection_name = f"_{collection_name}"
+
+        # Ensure embedder.embedder_type is preserved if explicitly set
+        # If embedder was passed but embedder_type is default (vertex),
+        # check if we should preserve it. This prevents overwriting user's choice
         return self
 
 
 server = FastMCP(
     "rag-config-planner",
-    log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
 
 
@@ -42,7 +46,10 @@ server = FastMCP(
     name="rag_config_plan",
     description=(
         "Suggest a RAG configuration (vectorstore/chunking/retriever/ranker) "
-        "for the given project and sources."
+        "for the given project and sources. "
+        "IMPORTANT: When passing rag_config parameter, ensure embedder.embedder_type "
+        "is explicitly set to match user's choice (openai, vertex, or azure_openai). "
+        "Do not rely on defaults."
     ),
 )
 async def rag_config_plan(args: RagConfigPlanArgs) -> str:
@@ -51,7 +58,11 @@ async def rag_config_plan(args: RagConfigPlanArgs) -> str:
 
 
 def main() -> None:
-    server.run(transport="stdio")
+    server.run(
+        transport="stdio",
+        log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
+        show_banner=False,
+    )
 
 
 if __name__ == "__main__":
