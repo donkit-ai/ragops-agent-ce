@@ -77,17 +77,10 @@ jobs:
           echo "✅ Successfully published to PyPI!"
           poetry version --short
 
-      - name: Commit version bump
+      - name: Note version bump
         if: steps.publish.outcome == 'success'
         run: |
-          set -e
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add pyproject.toml src/ragops_agent_ce/__init__.py
-          if git diff --staged --quiet; then
-            echo "No version changes to commit"
-          else
-            VERSION=$(poetry version --short)
-            git commit -m "chore: bump version to $VERSION [skip ci]"
-            git push
-          fi
+          VERSION=$(poetry version --short)
+          echo "✅ Version $VERSION published to PyPI"
+          echo "⚠️  Note: Version bump commit skipped due to branch protection rules"
+          echo "   To update version in repo, create a PR with version changes"
