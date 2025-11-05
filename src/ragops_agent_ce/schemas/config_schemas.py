@@ -124,6 +124,16 @@ class Embedder(BaseModel):
     """Embedder configuration."""
 
     embedder_type: str = Field(default=EmbedderType.VERTEX, description=EMBEDDER_TYPE_DESCRIPTION)
+    model_name: str | None = Field(
+        default=None,
+        description=(
+            "Specific embedding model name for the embedder provider. "
+            "For OpenAI: text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002. "
+            "For Vertex: uses default model. "
+            "For Azure OpenAI: deployment name or text-embedding-ada-002. "
+            "If not specified, uses provider defaults."
+        ),
+    )
 
 
 class ChunkingConfig(BaseModel):
