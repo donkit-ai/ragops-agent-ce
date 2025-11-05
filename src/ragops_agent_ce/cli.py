@@ -78,26 +78,26 @@ def version_callback(value: bool) -> None:
 
 @app.callback(invoke_without_command=True)
 def main(
-        ctx: typer.Context,
-        setup: bool = typer.Option(
-            False,
-            "--setup",
-            help="Run setup wizard to configure the agent",
-        ),
-        system: str | None = typer.Option(
-            None, "--system", "-s", help="System prompt to guide the agent"
-        ),
-        model: str | None = typer.Option(
-            None, "--model", "-m", help="LLM model to use (overrides settings)"
-        ),
-        provider: str | None = typer.Option(
-            None, "--provider", "-p", help="LLM provider to use (overrides .env settings)"
-        ),
-        show_checklist: bool = typer.Option(
-            True,
-            "--show-checklist/--no-checklist",
-            help="Render checklist panel at start and after each step",
-        ),
+    ctx: typer.Context,
+    setup: bool = typer.Option(
+        False,
+        "--setup",
+        help="Run setup wizard to configure the agent",
+    ),
+    system: str | None = typer.Option(
+        None, "--system", "-s", help="System prompt to guide the agent"
+    ),
+    model: str | None = typer.Option(
+        None, "--model", "-m", help="LLM model to use (overrides settings)"
+    ),
+    provider: str | None = typer.Option(
+        None, "--provider", "-p", help="LLM provider to use (overrides .env settings)"
+    ),
+    show_checklist: bool = typer.Option(
+        True,
+        "--show-checklist/--no-checklist",
+        help="Render checklist panel at start and after each step",
+    ),
 ) -> None:
     """RagOps Agent CE - LLM-powered CLI agent for building RAG pipelines."""
     # Setup logging according to .env / settings
@@ -194,13 +194,13 @@ def _render_markdown_to_rich(text: str) -> str:
 
 
 async def _astart_repl(
-        *,
-        system: str | None,
-        model: str | None,
-        provider: str | None,
-        mcp_commands: list[str] | None,
-        mcp_only: bool,
-        show_checklist: bool,
+    *,
+    system: str | None,
+    model: str | None,
+    provider: str | None,
+    mcp_commands: list[str] | None,
+    mcp_only: bool,
+    show_checklist: bool,
 ) -> None:
     console.print(RAGOPS_LOGO_TEXT)
     console.print(RAGOPS_LOGO_ART)
@@ -301,7 +301,7 @@ async def _astart_repl(
 
     # Stream event handler: returns updated (reply, display_content, temp_executing)
     def _process_stream_event(
-            event, reply: str, display_content: str, temp_executing: str
+        event, reply: str, display_content: str, temp_executing: str
     ) -> tuple[str, str, str]:
         nonlocal progress_line_index
         et = getattr(event, "type", None)
@@ -445,7 +445,7 @@ async def _astart_repl(
 
         if user_input.startswith(":agent "):
             _render_current_screen(show_input_space=False)
-            parts = user_input[len(":agent "):].strip().split("/", 1)
+            parts = user_input[len(":agent ") :].strip().split("/", 1)
             if len(parts) != 2:
                 transcript.append("[bold red]Error:[/bold red] Invalid agent command format.")
                 continue
