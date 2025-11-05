@@ -7,8 +7,8 @@ import unicodedata
 from pathlib import Path
 from typing import Literal
 
-import mcp
 from donkit.read_engine.read_engine import DonkitReader
+from fastmcp import FastMCP
 from loguru import logger
 from pydantic import BaseModel
 from pydantic import Field
@@ -29,9 +29,13 @@ class ProcessDocumentsArgs(BaseModel):
         default="json",  # TODO: add new types - .md, .txt
         description="Output format for processed documents, always json",
     )
+    use_llm: bool = Field(
+        default=True,
+        description="Use LLM to process pdf, pptx, docx documents with tables, images, etc.",
+    )
 
 
-server = mcp.server.FastMCP(
+server = FastMCP(
     "rag-read-engine",
     log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
@@ -49,7 +53,7 @@ server = mcp.server.FastMCP(
         "Don't use this tool to get documents content! It returns only path to processed directory."
     ).strip(),
 )
-async def process_documents(args: ProcessDocumentsArgs) -> mcp.types.TextContent:
+async def process_documents(args: ProcessDocumentsArgs) -> str:
     """Process documents from source directory, file, or file list using DonkitReader.
 
     This tool converts various document formats to text-based formats that can be
@@ -60,7 +64,7 @@ async def process_documents(args: ProcessDocumentsArgs) -> mcp.types.TextContent
     logger.debug(f"source_path type: {type(args.source_path)}, value: {repr(args.source_path)}")
     logger.debug(f"project_id: {args.project_id}")
 
-    reader = DonkitReader()
+    reader = DonkitReader(use_llm=args.use_llm)
     logger.debug(reader.readers)
     supported_extensions = set(reader.readers.keys())
 
@@ -78,16 +82,13 @@ async def process_documents(args: ProcessDocumentsArgs) -> mcp.types.TextContent
         if source_path.suffix.lower() in supported_extensions:
             files_to_process.append(source_path)
         else:
-            return mcp.types.TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"File format not supported: {source_path.suffix}. "
-                        f"Supported: {list(supported_extensions)}",
-                    },
-                    ensure_ascii=False,
-                ),
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"File format not supported: {source_path.suffix}. "
+                    f"Supported: {list(supported_extensions)}",
+                },
+                ensure_ascii=False,
             )
     # Check if it's a directory
     elif source_path.is_dir():
@@ -129,20 +130,17 @@ async def process_documents(args: ProcessDocumentsArgs) -> mcp.types.TextContent
                 similar_files.append(str(file_path))
 
         if similar_files:
-            return mcp.types.TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"File not found: {source_path.name}\n\n"
-                        f"Found similar file(s):\n"
-                        + "\n".join(f"- {f}" for f in similar_files)
-                        + "\n\n"
-                        "Please provide the exact file path from the list above.",
-                        "similar_files": similar_files,
-                    },
-                    ensure_ascii=False,
-                ),
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"File not found: {source_path.name}\n\n"
+                    f"Found similar file(s):\n"
+                    + "\n".join(f"- {f}" for f in similar_files)
+                    + "\n\n"
+                    "Please provide the exact file path from the list above.",
+                    "similar_files": similar_files,
+                },
+                ensure_ascii=False,
             )
 
     # Final check: if still no files found
@@ -154,16 +152,13 @@ async def process_documents(args: ProcessDocumentsArgs) -> mcp.types.TextContent
             f"exists={source_path.exists()}, "
             f"path={source_path}"
         )
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {
-                    "status": "error",
-                    "message": f"No supported files found in {source_path}. "
-                    f"Supported: {list(supported_extensions)}",
-                },
-                ensure_ascii=False,
-            ),
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"No supported files found in {source_path}. "
+                f"Supported: {list(supported_extensions)}",
+            },
+            ensure_ascii=False,
         )
 
     # Create project output directory
@@ -226,7 +221,7 @@ async def process_documents(args: ProcessDocumentsArgs) -> mcp.types.TextContent
         ),
     }
 
-    return mcp.types.TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))
+    return json.dumps(result, indent=2, ensure_ascii=False)
 
 
 def main() -> None:

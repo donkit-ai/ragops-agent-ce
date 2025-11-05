@@ -4,16 +4,15 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-import mcp
 from donkit.embeddings import get_vertexai_embeddings
 from donkit.vectorstore_loader import create_vectorstore_loader
+from fastmcp import FastMCP
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_openai import AzureOpenAIEmbeddings
 from langchain_openai import OpenAIEmbeddings
 from pydantic import BaseModel
 from pydantic import Field
-from pydantic import validate_call
 
 
 def create_embedder(embedder_type: str) -> Embeddings:
@@ -96,7 +95,7 @@ class VectorstoreLoadArgs(BaseModel):
     params: VectorstoreParams
 
 
-server = mcp.server.FastMCP(
+server = FastMCP(
     "rag-vectorstore-loader",
     log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),
 )
@@ -112,16 +111,14 @@ server = mcp.server.FastMCP(
         "Use list_directory on chunked folder to find which files to load."
     ),
 )
-@validate_call
 async def vectorstore_load(
     chunks_path: str,
     params: VectorstoreParams,
-) -> mcp.types.TextContent:
+) -> str:
     if "localhost" not in params.database_uri:
-        return mcp.types.TextContent(
-            type="text",
-            text="Error: database URI must be outside "
-            "docker like 'localhost' or '127.0.0.1' or '0.0.0.0'",
+        return (
+            "Error: database URI must be outside "
+            "docker like 'localhost' or '127.0.0.1' or '0.0.0.0'"
         )
 
     # Determine files to load based on chunks_path
@@ -140,20 +137,16 @@ async def vectorstore_load(
         if file_path.suffix == ".json":
             json_files.append(file_path)
         else:
-            return mcp.types.TextContent(
-                type="text", text=f"Error: file must be JSON, got {file_path.suffix}"
-            )
+            return f"Error: file must be JSON, got {file_path.suffix}"
     # Check if it's a directory
     elif Path(chunks_path).is_dir():
         dir_path = Path(chunks_path)
         json_files = sorted([f for f in dir_path.iterdir() if f.is_file() and f.suffix == ".json"])
     else:
-        return mcp.types.TextContent(type="text", text=f"Error: path not found: {chunks_path}")
+        return f"Error: path not found: {chunks_path}"
 
     if not json_files:
-        return mcp.types.TextContent(
-            type="text", text=f"Error: no JSON files found in {chunks_path}"
-        )
+        return f"Error: no JSON files found in {chunks_path}"
 
     try:
         embeddings = create_embedder(params.embedder_type)
@@ -164,11 +157,9 @@ async def vectorstore_load(
             database_uri=params.database_uri,
         )
     except ValueError as e:
-        return mcp.types.TextContent(type="text", text=f"Error initializing vectorstore: {e}")
+        return f"Error initializing vectorstore: {e}"
     except Exception as e:
-        return mcp.types.TextContent(
-            type="text", text=f"Unexpected error during initialization: {e}"
-        )
+        return f"Unexpected error during initialization: {e}"
 
     # Load files one by one for detailed tracking
     total_chunks_loaded = 0
@@ -245,7 +236,7 @@ async def vectorstore_load(
         for filename, error in failed_files:
             summary_lines.append(f"  • {filename}: {error}")
 
-    return mcp.types.TextContent(type="text", text="\n".join(summary_lines))
+    return "\n".join(summary_lines)
 
 
 def main() -> None:

@@ -4,9 +4,9 @@ import json
 import os
 from pathlib import Path
 
-import mcp
 from donkit.chunker import ChunkerConfig
 from donkit.chunker import DonkitChunker
+from fastmcp import FastMCP
 from pydantic import BaseModel
 from pydantic import Field
 
@@ -24,7 +24,7 @@ class ChunkDocumentsArgs(BaseModel):
     )
 
 
-server = mcp.server.FastMCP(
+server = FastMCP(
     "rag-chunker",
     log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
@@ -41,15 +41,12 @@ server = mcp.server.FastMCP(
         "MUST always use JSON chunking!"  # TODO: remove when can read in md
     ).strip(),
 )
-async def chunk_documents(args: ChunkDocumentsArgs) -> mcp.types.TextContent:
+async def chunk_documents(args: ChunkDocumentsArgs) -> str:
     chunker = DonkitChunker(args.params)
     source_dir = Path(args.source_path)
 
     if not source_dir.exists() or not source_dir.is_dir():
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps({"status": "error", "message": f"Source path not found: {source_dir}"}),
-        )
+        return json.dumps({"status": "error", "message": f"Source path not found: {source_dir}"})
 
     # Create output directory in project
     output_path = Path(f"projects/{args.project_id}/processed/chunked").resolve()
@@ -111,9 +108,7 @@ async def chunk_documents(args: ChunkDocumentsArgs) -> mcp.types.TextContent:
     )
 
     # Return results as JSON string
-    return mcp.types.TextContent(
-        type="text", text=json.dumps(results, ensure_ascii=False, indent=2)
-    )
+    return json.dumps(results, ensure_ascii=False, indent=2)
 
 
 def main() -> None:

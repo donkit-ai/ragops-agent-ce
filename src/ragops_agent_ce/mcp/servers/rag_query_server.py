@@ -4,7 +4,7 @@ import json
 import os
 
 import httpx
-import mcp
+from fastmcp import FastMCP
 from pydantic import BaseModel
 from pydantic import Field
 
@@ -18,7 +18,7 @@ class SearchQueryArgs(BaseModel):
     )
 
 
-server = mcp.server.FastMCP(
+server = FastMCP(
     "rag-query",
     log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
@@ -32,7 +32,7 @@ server = mcp.server.FastMCP(
         "Not use full rag-config, only retriever."
     ).strip(),
 )
-async def search_documents(args: SearchQueryArgs) -> mcp.types.TextContent:
+async def search_documents(args: SearchQueryArgs) -> str:
     """Search for documents using RAG service HTTP API."""
     url = f"{args.rag_service_url.rstrip('/')}/api/query/search"
 
@@ -66,40 +66,29 @@ async def search_documents(args: SearchQueryArgs) -> mcp.types.TextContent:
                 }
                 formatted_results["documents"].append(formatted_doc)
 
-            return mcp.types.TextContent(
-                type="text", text=json.dumps(formatted_results, ensure_ascii=False, indent=2)
-            )
+            return json.dumps(formatted_results, ensure_ascii=False, indent=2)
 
     except httpx.HTTPStatusError as e:
         error_detail = f"HTTP {e.response.status_code}: {e.response.text}"
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {"error": "HTTP request failed", "detail": error_detail, "url": url},
-                ensure_ascii=False,
-                indent=2,
-            ),
+        return json.dumps(
+            {"error": "HTTP request failed", "detail": error_detail, "url": url},
+            ensure_ascii=False,
+            indent=2,
         )
     except httpx.RequestError as e:
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {
-                    "error": "Request error",
-                    "detail": str(e),
-                    "url": url,
-                    "hint": "Make sure RAG service is running and accessible",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
+        return json.dumps(
+            {
+                "error": "Request error",
+                "detail": str(e),
+                "url": url,
+                "hint": "Make sure RAG service is running and accessible",
+            },
+            ensure_ascii=False,
+            indent=2,
         )
     except Exception as e:
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {"error": "Unexpected error", "detail": str(e)}, ensure_ascii=False, indent=2
-            ),
+        return json.dumps(
+            {"error": "Unexpected error", "detail": str(e)}, ensure_ascii=False, indent=2
         )
 
 
@@ -111,7 +100,7 @@ async def search_documents(args: SearchQueryArgs) -> mcp.types.TextContent:
         "Use full rag-config for prompt generation."
     ).strip(),
 )
-async def get_rag_prompt(args: SearchQueryArgs) -> mcp.types.TextContent:
+async def get_rag_prompt(args: SearchQueryArgs) -> str:
     """Get formatted RAG prompt using RAG service HTTP API."""
     url = f"{args.rag_service_url.rstrip('/')}/api/query/prompt"
 
@@ -126,38 +115,29 @@ async def get_rag_prompt(args: SearchQueryArgs) -> mcp.types.TextContent:
             # Response is plain text prompt
             prompt = response.text
 
-            return mcp.types.TextContent(type="text", text=prompt)
+            return prompt
 
     except httpx.HTTPStatusError as e:
         error_detail = f"HTTP {e.response.status_code}: {e.response.text}"
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {"error": "HTTP request failed", "detail": error_detail, "url": url},
-                ensure_ascii=False,
-                indent=2,
-            ),
+        return json.dumps(
+            {"error": "HTTP request failed", "detail": error_detail, "url": url},
+            ensure_ascii=False,
+            indent=2,
         )
     except httpx.RequestError as e:
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {
-                    "error": "Request error",
-                    "detail": str(e),
-                    "url": url,
-                    "hint": "Make sure RAG service is running and accessible",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
+        return json.dumps(
+            {
+                "error": "Request error",
+                "detail": str(e),
+                "url": url,
+                "hint": "Make sure RAG service is running and accessible",
+            },
+            ensure_ascii=False,
+            indent=2,
         )
     except Exception as e:
-        return mcp.types.TextContent(
-            type="text",
-            text=json.dumps(
-                {"error": "Unexpected error", "detail": str(e)}, ensure_ascii=False, indent=2
-            ),
+        return json.dumps(
+            {"error": "Unexpected error", "detail": str(e)}, ensure_ascii=False, indent=2
         )
 
 

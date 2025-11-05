@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 
-import mcp
+from fastmcp import FastMCP
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
@@ -32,7 +32,7 @@ class RagConfigPlanArgs(BaseModel):
         return self
 
 
-server = mcp.server.FastMCP(
+server = FastMCP(
     "rag-config-planner",
     log_level=os.getenv("RAGOPS_LOG_LEVEL", "CRITICAL"),  # noqa
 )
@@ -45,9 +45,9 @@ server = mcp.server.FastMCP(
         "for the given project and sources."
     ),
 )
-async def rag_config_plan(args: RagConfigPlanArgs) -> mcp.types.TextContent:
+async def rag_config_plan(args: RagConfigPlanArgs) -> str:
     plan = args.rag_config.model_dump_json()
-    return mcp.types.TextContent(type="text", text=plan)
+    return plan
 
 
 def main() -> None:
