@@ -138,7 +138,7 @@ class InteractiveInputBox:
                 content.append("ype your message... ", style="dim")
             else:
                 content.append("Type your message... ", style="dim")
-            content.append("(Ctrl+D to submit, Enter for newline, :q to quit, :help to list commands)", style="yellow dim")
+            content.append("(Enter to submit, Alt+Enter for newline, :q to quit)", style="yellow dim")
         else:
             # Render multiline text with cursor
             for line_idx, line_text in enumerate(lines):
@@ -220,21 +220,91 @@ class InteractiveInputBox:
                         )
                     )
 
-                    # Check input
-                    if sys.stdin in select.select([sys.stdin], [], [], 0.05)[0]:
-                        char = sys.stdin.read(1)
+                    # Check input - read all available characters at once for paste handling
+                    ready, _, _ = select.select([sys.stdin], [], [], 0.05)
+                    if ready:
+                        # Read all available characters immediately
+                        import os
+                        chars = []
+                        
+                        # First read - get what's immediately available
+                        try:
+                            chunk = os.read(fd, 4096)
+                            if chunk:
+                                text_chunk = chunk.decode('utf-8', errors='replace')
+                                chars.extend(list(text_chunk))
+                        except (BlockingIOError, OSError, UnicodeDecodeError):
+                            pass
+                        
+                        # If we got at least one char, check for more with small delay (paste indicator)
+                        if chars:
+                            # Small delay to allow more characters to arrive (for paste)
+                            time.sleep(0.01)
+                            
+                            # Read additional characters that might have arrived
+                            max_additional_reads = 5
+                            for _ in range(max_additional_reads):
+                                try:
+                                    r, _, _ = select.select([sys.stdin], [], [], 0.001)
+                                    if not r:
+                                        break
+                                    chunk = os.read(fd, 4096)
+                                    if chunk:
+                                        text_chunk = chunk.decode('utf-8', errors='replace')
+                                        chars.extend(list(text_chunk))
+                                    else:
+                                        break
+                                except (BlockingIOError, OSError, UnicodeDecodeError):
+                                    break
+                        
+                        # If no chars from os.read, try sys.stdin.read
+                        if not chars:
+                            try:
+                                char = sys.stdin.read(1)
+                                if char:
+                                    chars = [char]
+                            except:
+                                pass
+                        
+                        if not chars:
+                            continue
+                        
+                        # If we got multiple chars, it's likely a paste
+                        if len(chars) > 1:
+                            paste_text = "".join(chars)
+                            
+                            # Filter out control chars except newlines
+                            filtered_chars = []
+                            for c in paste_text:
+                                if c in ("\r", "\n"):
+                                    filtered_chars.append("\n" if c == "\r" else c)
+                                elif len(c) == 1 and ord(c) >= 32:
+                                    filtered_chars.append(c)
+                            
+                            if filtered_chars:
+                                text_to_insert = "".join(filtered_chars)
+                                self.current_text = (
+                                    self.current_text[: self.cursor_pos]
+                                    + text_to_insert
+                                    + self.current_text[self.cursor_pos :]
+                                )
+                                self.cursor_pos += len(text_to_insert)
+                                # Force immediate panel update
+                                live.update(
+                                    self._create_input_panel(
+                                        self.current_text, self.cursor_pos, self.cursor_visible
+                                    )
+                                )
+                                continue
+                        
+                        # Single character input
+                        char = chars[0]
                     else:
                         continue
 
-                    # Handle Enter key - Enter inserts newline, Ctrl+D submits
+                    # Handle Enter key - Enter submits
                     if char in ("\r", "\n"):
-                        # Enter inserts newline (multiline support)
-                        self.current_text = (
-                            self.current_text[: self.cursor_pos]
-                            + "\n"
-                            + self.current_text[self.cursor_pos :]
-                        )
-                        self.cursor_pos += 1
+                        break  # Submit on Enter
                     elif char == "\x03":  # Ctrl+C
                         raise KeyboardInterrupt
                     elif char == "\x04":  # Ctrl+D - submit
@@ -250,10 +320,30 @@ class InteractiveInputBox:
                             )
                             self.cursor_pos -= 1
                     elif char == "\x1b":  # Escape sequence (arrows, etc.)
+                        # Read next character with timeout
+                        ready, _, _ = select.select([sys.stdin], [], [], 0.01)
+                        if not ready:
+                            continue  # Just Escape key, ignore
+                        
                         next1 = sys.stdin.read(1)
-                        if next1 == "":  # Just Escape key
+                        if not next1:
                             continue
-                        next2 = sys.stdin.read(1) if next1 == "[" else ""
+                        
+                        # Check for Alt+Enter (Esc+Enter) - inserts newline
+                        if next1 in ("\r", "\n"):
+                            # Alt+Enter inserts newline
+                            self.current_text = (
+                                self.current_text[: self.cursor_pos]
+                                + "\n"
+                                + self.current_text[self.cursor_pos :]
+                            )
+                            self.cursor_pos += 1
+                            continue
+                        
+                        # Read next character for arrow keys
+                        ready, _, _ = select.select([sys.stdin], [], [], 0.01)
+                        next2 = sys.stdin.read(1) if ready else ""
+                        
                         if next1 == "[":
                             if next2 == "D":  # Left arrow
                                 if self.cursor_pos > 0:
