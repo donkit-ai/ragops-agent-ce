@@ -458,7 +458,7 @@ class ListContainersArgs(BaseModel):
         "if want to analyze whether container from another project occupies the same port"
     ),
 )
-async def list_containers(args: ListContainersArgs) -> str:
+async def list_containers() -> str:
     """List Docker containers."""
     try:
         result = subprocess.run(
