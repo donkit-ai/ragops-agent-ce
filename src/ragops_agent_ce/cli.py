@@ -1,21 +1,5 @@
 from __future__ import annotations
 
-import warnings
-
-# Suppress warnings from transitive dependencies we don't control
-#
-# See __main__.py for detailed explanation of why these warnings are suppressed.
-# These are issues in dependencies (pypdf, matplotlib) that don't affect our functionality.
-warnings.filterwarnings("ignore", message=".*Unable to import Axes3D.*", module="matplotlib")
-warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib.projections")
-warnings.filterwarnings("ignore", message=".*ARC4 has been moved.*")
-try:
-    from cryptography.utils import CryptographyDeprecationWarning
-
-    warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
-except ImportError:
-    pass
-
 import asyncio
 import json
 import os
@@ -70,7 +54,6 @@ from .checklist_manager import get_active_checklist_text
 from .config import load_settings
 from .display import ScreenRenderer
 from .interactive_input import get_user_input
-from .llm.provider_factory import PROVIDER_PATHS
 from .llm.provider_factory import get_provider
 from .llm.types import Message
 from .logging_config import setup_logging
@@ -169,15 +152,7 @@ def ping() -> None:
     console.print("pong")
 
 
-DEFAULT_MCP_COMMANDS = [
-    "ragops-compose-manager",
-    "ragops-rag-planner",
-    "ragops-read-engine",
-    "ragops-chunker",
-    "ragops-vectorstore-loader",
-    "ragops-checklist",
-    "ragops-rag-query",
-]
+DEFAULT_MCP_COMMANDS = ["donkit-ragops-mcp"]
 
 
 def _time_str() -> str:
@@ -463,9 +438,9 @@ async def _astart_repl(
         if user_input == ":provider":
             # Select provider interactively
             _render_current_screen(show_input_space=False)
-            from .model_selector import PROVIDERS
             from .credential_checker import check_provider_credentials
             from .interactive_input import interactive_select
+            from .model_selector import PROVIDERS
 
             # Build list of providers with status indicators
             choices = []
@@ -505,41 +480,46 @@ async def _astart_repl(
             if not has_creds:
                 # Ask user to configure credentials
                 _render_current_screen(show_input_space=False)
-                from .interactive_input import interactive_confirm
-                from rich.prompt import Prompt
                 from rich.console import Console as RichConsole
-                
+                from rich.prompt import Prompt
+
+                from .interactive_input import interactive_confirm
+
                 setup_console = RichConsole()
                 setup_console.print(
                     f"\n[bold yellow]⚠ Provider not configured[/bold yellow]\n"
-                    f"Credentials are required for [cyan]{PROVIDERS[new_provider]['display']}[/cyan]\n"
+                    f"Credentials required for "
+                    f"[cyan]{PROVIDERS[new_provider]['display']}[/cyan]\n"
                 )
-                
-                configure_now = interactive_confirm(
-                    "Configure credentials now?", default=True
-                )
-                
+
+                configure_now = interactive_confirm("Configure credentials now?", default=True)
+
                 if not configure_now:
                     transcript.append(
-                        "[bold yellow]Provider selection cancelled. Credentials required.[/bold yellow]"
+                        "[bold yellow]Provider selection cancelled. "
+                        "Credentials required.[/bold yellow]"
                     )
                     _render_current_screen(show_input_space=True)
                     continue
-                
+
                 # Configure credentials interactively
                 config = {}
                 try:
                     if new_provider == "openai":
-                        setup_console.print("[dim]Get your API key at: https://platform.openai.com/api-keys[/dim]\n")
+                        setup_console.print(
+                            "[dim]Get your API key at: https://platform.openai.com/api-keys[/dim]\n"
+                        )
                         api_key = Prompt.ask("Enter OpenAI API key", password=True)
                         if not api_key:
                             transcript.append("[bold red]Error:[/bold red] API key is required")
                             _render_current_screen(show_input_space=True)
                             continue
                         config["RAGOPS_OPENAI_API_KEY"] = api_key
-                        
+
                     elif new_provider == "azure_openai":
-                        setup_console.print("[dim]You need credentials from Azure OpenAI service.[/dim]\n")
+                        setup_console.print(
+                            "[dim]You need credentials from Azure OpenAI service.[/dim]\n"
+                        )
                         api_key = Prompt.ask("Enter Azure OpenAI API key", password=True)
                         endpoint = Prompt.ask("Enter Azure OpenAI endpoint", default="")
                         deployment = Prompt.ask("Enter deployment name", default="")
@@ -551,18 +531,22 @@ async def _astart_repl(
                         config["RAGOPS_AZURE_OPENAI_ENDPOINT"] = endpoint
                         config["RAGOPS_AZURE_OPENAI_DEPLOYMENT"] = deployment
                         config["RAGOPS_AZURE_OPENAI_API_VERSION"] = "2024-02-15-preview"
-                        
+
                     elif new_provider == "anthropic":
-                        setup_console.print("[dim]Get your API key at: https://console.anthropic.com/[/dim]\n")
+                        setup_console.print(
+                            "[dim]Get your API key at: https://console.anthropic.com/[/dim]\n"
+                        )
                         api_key = Prompt.ask("Enter Anthropic API key", password=True)
                         if not api_key:
                             transcript.append("[bold red]Error:[/bold red] API key is required")
                             _render_current_screen(show_input_space=True)
                             continue
                         config["RAGOPS_ANTHROPIC_API_KEY"] = api_key
-                        
+
                     elif new_provider == "vertex":
-                        setup_console.print("[dim]You need a service account key file from Google Cloud.[/dim]\n")
+                        setup_console.print(
+                            "[dim]You need a service account key file from Google Cloud.[/dim]\n"
+                        )
                         path = Prompt.ask("Enter path to service account JSON file")
                         path = os.path.expanduser(path)
                         if not Path(path).exists():
@@ -570,14 +554,18 @@ async def _astart_repl(
                             _render_current_screen(show_input_space=True)
                             continue
                         config["RAGOPS_VERTEX_CREDENTIALS"] = path
-                        
+
                     elif new_provider == "ollama":
-                        base_url = Prompt.ask("Ollama base URL", default="http://localhost:11434/api/v1")
+                        base_url = Prompt.ask(
+                            "Ollama base URL", default="http://localhost:11434/api/v1"
+                        )
                         config["RAGOPS_OPENAI_API_KEY"] = "ollama"
                         config["RAGOPS_OPENAI_BASE_URL"] = base_url
-                        
+
                     elif new_provider == "openrouter":
-                        setup_console.print("[dim]Get your API key at: https://openrouter.ai/keys[/dim]\n")
+                        setup_console.print(
+                            "[dim]Get your API key at: https://openrouter.ai/keys[/dim]\n"
+                        )
                         api_key = Prompt.ask("Enter OpenRouter API key", password=True)
                         if not api_key:
                             transcript.append("[bold red]Error:[/bold red] API key is required")
@@ -585,10 +573,10 @@ async def _astart_repl(
                             continue
                         config["RAGOPS_OPENAI_API_KEY"] = api_key
                         config["RAGOPS_OPENAI_BASE_URL"] = "https://openrouter.ai/api/v1"
-                    
+
                     # Save to .env file
                     from dotenv import dotenv_values
-                    
+
                     env_path = Path.cwd() / ".env"
                     existing_config = {}
                     if env_path.exists():
@@ -596,48 +584,50 @@ async def _astart_repl(
                             existing_config = dict(dotenv_values(env_path))
                         except Exception:
                             pass
-                    
+
                     # Merge configs
                     merged_config = {**existing_config, **config}
                     merged_config["RAGOPS_LLM_PROVIDER"] = new_provider
-                    
+
                     # Write to .env
                     lines = []
                     if not env_path.exists():
-                        lines.extend([
-                            "# RAGOps Agent CE Configuration",
-                            "",
-                        ])
-                    
+                        lines.extend(
+                            [
+                                "# RAGOps Agent CE Configuration",
+                                "",
+                            ]
+                        )
+
                     # Add provider setting
                     lines.append(f"RAGOPS_LLM_PROVIDER={new_provider}")
                     lines.append("")
-                    
+
                     # Add provider-specific settings
                     lines.append(f"# {new_provider.upper()} settings")
                     for key, value in config.items():
                         lines.append(f"{key}={value}")
                     lines.append("")
-                    
+
                     # Add any existing settings not overwritten
                     for key, value in existing_config.items():
                         if key not in merged_config or key == "RAGOPS_LLM_PROVIDER":
                             continue
                         if key not in config:
                             lines.append(f"{key}={value}")
-                    
+
                     env_path.write_text("\n".join(lines))
                     transcript.append(
-                        f"[bold green]✓ Credentials configured and saved to .env[/bold green]"
+                        "[bold green]✓ Credentials configured and saved to .env[/bold green]"
                     )
-                    
+
                 except Exception as e:
                     transcript.append(
                         f"[bold red]Error:[/bold red] Failed to configure credentials: {str(e)}"
                     )
                     _render_current_screen(show_input_space=True)
                     continue
-                
+
                 # Reload settings after saving
                 settings = load_settings()
 
@@ -661,21 +651,21 @@ async def _astart_repl(
                     "[bold cyan]Provider updated:[/bold cyan] "
                     f"[yellow]{PROVIDERS[new_provider]['display']}[/yellow]"
                 )
-                
+
                 # Automatically prompt for model selection after provider change
                 _render_current_screen(show_input_space=False)
                 from .interactive_input import interactive_select
-                
+
                 # Try to get chat models from provider dynamically
                 models = []
                 try:
-                    if prov and hasattr(prov, 'list_chat_models'):
+                    if prov and hasattr(prov, "list_chat_models"):
                         models = prov.list_chat_models()
-                    elif prov and hasattr(prov, 'list_models'):
+                    elif prov and hasattr(prov, "list_models"):
                         models = prov.list_models()
                 except Exception as e:
                     logger.warning(f"Failed to get models from provider: {e}")
-                
+
                 # Fallback to common models if provider doesn't support listing or failed
                 if not models:
                     common_models = {
@@ -725,7 +715,7 @@ async def _astart_repl(
                         ],
                     }
                     models = common_models.get(new_provider, [])
-                
+
                 if models:
                     # Build choices list
                     choices = []
@@ -734,24 +724,24 @@ async def _astart_repl(
                         if model_name == (agent_settings.model or model):
                             choice += " [bold cyan]← Current[/bold cyan]"
                         choices.append(choice)
-                    
+
                     # Add "Skip" option
                     choices.append("Skip (use default)")
-                    
+
                     title = f"Select Model for {PROVIDERS[new_provider]['display']}"
                     selected_choice = interactive_select(choices, title=title)
-                    
+
                     if selected_choice and selected_choice != "Skip (use default)":
                         # Extract model name (remove "← Current" if present)
                         new_model = selected_choice.split(" [")[0].strip()
-                        
+
                         # Validate model by trying to use it
                         try:
                             # Test if model is actually available by making a test request
                             test_messages = [Message(role="user", content="test")]
                             try:
                                 # Try to generate with the model (with minimal tokens)
-                                test_response = prov.generate(
+                                prov.generate(
                                     test_messages,
                                     model=new_model,
                                     max_tokens=1,
@@ -768,10 +758,19 @@ async def _astart_repl(
                                 # Model is not available
                                 error_msg = str(model_error)
                                 # Extract more user-friendly error message
-                                if "model" in error_msg.lower() and ("not found" in error_msg.lower() or "does not exist" in error_msg.lower() or "not available" in error_msg.lower()):
-                                    friendly_msg = f"Model '{new_model}' is not available or not accessible with your API key."
+                                if "model" in error_msg.lower() and (
+                                    "not found" in error_msg.lower()
+                                    or "does not exist" in error_msg.lower()
+                                    or "not available" in error_msg.lower()
+                                ):
+                                    friendly_msg = (
+                                        f"Model '{new_model}' is not available or not "
+                                        "accessible with your API key."
+                                    )
                                 else:
-                                    friendly_msg = f"Model '{new_model}' is not available: {error_msg}"
+                                    friendly_msg = (
+                                        f"Model '{new_model}' is not available: {error_msg}"
+                                    )
                                 transcript.append(
                                     f"[bold red]Error:[/bold red] {friendly_msg}\n"
                                     "[yellow]Please select a different model.[/yellow]"
@@ -786,20 +785,19 @@ async def _astart_repl(
                             transcript.append(
                                 "[bold cyan]Model selected:[/bold cyan] "
                                 f"[yellow]{new_model}[/yellow]\n"
-                                "[dim yellow]Note: Could not validate model availability[/dim yellow]"
+                                "[dim yellow]Note: Could not validate model "
+                                "availability[/dim yellow]"
                             )
                             save_model_selection(new_provider, new_model)
                     elif selected_choice == "Skip (use default)":
-                        transcript.append(
-                            "[dim]Using default model for this provider[/dim]"
-                        )
+                        transcript.append("[dim]Using default model for this provider[/dim]")
                     # If None (cancelled), just continue without setting model
                 else:
                     transcript.append(
                         "[bold yellow]No models available for selection. "
                         "Please specify model name in .env file or use CLI flag.[/bold yellow]"
                     )
-                
+
             except Exception as e:
                 transcript.append(
                     f"[bold red]Error:[/bold red] Failed to initialize provider: {str(e)}"
@@ -818,9 +816,9 @@ async def _astart_repl(
             # Try to get chat models from provider dynamically (for agent use)
             models = []
             try:
-                if prov and hasattr(prov, 'list_chat_models'):
+                if prov and hasattr(prov, "list_chat_models"):
                     models = prov.list_chat_models()
-                elif prov and hasattr(prov, 'list_models'):
+                elif prov and hasattr(prov, "list_models"):
                     # Fallback to all models if list_chat_models not available
                     models = prov.list_models()
             except Exception as e:
@@ -907,7 +905,8 @@ async def _astart_repl(
 
             if selected_choice == "Custom (enter manually)":
                 transcript.append(
-                    "[bold yellow]Please specify model name in .env file or use CLI flag.[/bold yellow]"
+                    "[bold yellow]Please specify model name in .env file or "
+                    "use CLI flag.[/bold yellow]"
                 )
                 _render_current_screen(show_input_space=True)
                 continue
@@ -920,7 +919,7 @@ async def _astart_repl(
                 # Test if model is actually available
                 test_messages = [Message(role="user", content="test")]
                 try:
-                    test_response = prov.generate(
+                    prov.generate(
                         test_messages,
                         model=new_model,
                         max_tokens=1,
@@ -935,8 +934,15 @@ async def _astart_repl(
                 except Exception as model_error:
                     # Model is not available
                     error_msg = str(model_error)
-                    if "model" in error_msg.lower() and ("not found" in error_msg.lower() or "does not exist" in error_msg.lower() or "not available" in error_msg.lower()):
-                        friendly_msg = f"Model '{new_model}' is not available or not accessible with your API key."
+                    if "model" in error_msg.lower() and (
+                        "not found" in error_msg.lower()
+                        or "does not exist" in error_msg.lower()
+                        or "not available" in error_msg.lower()
+                    ):
+                        friendly_msg = (
+                            f"Model '{new_model}' is not available or not "
+                            "accessible with your API key."
+                        )
                     else:
                         friendly_msg = f"Model '{new_model}' is not available: {error_msg}"
                     transcript.append(

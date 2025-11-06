@@ -68,7 +68,7 @@ class AnthropicProvider(LLMProvider):
 
     def list_models(self) -> list[str]:
         """Get list of available models from Anthropic.
-        
+
         Note: Anthropic API doesn't provide a models list endpoint,
         so we return common models.
         """

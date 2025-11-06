@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+import warnings
+
+# Suppress all warnings immediately, before any other imports
+warnings.filterwarnings("ignore")
+# Suppress warnings from importlib bootstrap (SWIG-related)
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="importlib._bootstrap")
+# Suppress all DeprecationWarnings globally
+warnings.simplefilter("ignore", DeprecationWarning)
 import os
 import re
 from typing import Self
