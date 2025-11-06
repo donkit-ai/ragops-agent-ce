@@ -16,6 +16,8 @@ from rich.panel import Panel
 from rich.style import Style
 from rich.text import Text
 
+from .command_palette import CommandPalette, CommandRegistry
+
 if TYPE_CHECKING:
     import termios
     import tty
@@ -94,6 +96,11 @@ class InteractiveInputBox:
         self.cursor_visible = True
         self.last_blink = time.time()
         self.blink_interval = 0.5  # seconds
+        self.command_registry = CommandRegistry()
+        self.palette_active = False
+        self.palette_query = ""
+        self.palette_start_pos = 0
+        self.palette_selected_index = 0
 
     def _get_cursor_position(self, text: str, cursor: int) -> tuple[int, int]:
         """Get cursor position as (line, column) from absolute cursor position."""
@@ -180,6 +187,42 @@ class InteractiveInputBox:
             expand=True,
         )
 
+    def _should_activate_palette(self, text: str, cursor_pos: int) -> bool:
+        """Check if command palette should be activated (when / is at start of line or after space)."""
+        if cursor_pos == 0:
+            return True  # At start of line
+        if cursor_pos > 0 and text[cursor_pos - 1] in (" ", "\n"):
+            return True  # After space or newline
+        return False
+
+    def _create_combined_panel(self) -> Panel:
+        """Create combined panel with palette overlay and input box."""
+        from rich.layout import Layout
+
+        if self.palette_active:
+            filtered = self.command_registry.filter(self.palette_query)
+            # Show palette even if no matches (will show "No commands found" message)
+            palette = CommandPalette(self.command_registry, self.palette_query)
+            palette.selected_index = self.palette_selected_index
+            # Ensure selected_index is within bounds
+            if filtered:
+                if self.palette_selected_index >= len(filtered):
+                    self.palette_selected_index = len(filtered) - 1
+            else:
+                self.palette_selected_index = 0
+            palette.selected_index = self.palette_selected_index
+            palette_panel = palette._create_palette_panel(self.palette_selected_index)
+            # Create a layout with palette on top and input below
+            layout = Layout()
+            # Calculate palette height: at least 6 lines, up to 15 lines
+            palette_height = min(15, max(6, len(filtered) + 4) if filtered else 6)
+            layout.split_column(
+                Layout(palette_panel, size=palette_height),
+                Layout(self._create_input_panel(self.current_text, self.cursor_pos, self.cursor_visible)),
+            )
+            return layout
+        return self._create_input_panel(self.current_text, self.cursor_pos, self.cursor_visible)
+
     def get_input(self) -> str:
         """Get user input with interactive box or fallback to simple prompt."""
         try:
@@ -196,6 +239,10 @@ class InteractiveInputBox:
         self.cursor_pos = 0
         self.cursor_visible = True
         self.last_blink = time.time()
+        self.palette_active = False
+        self.palette_query = ""
+        self.palette_start_pos = 0
+        self.palette_selected_index = 0
 
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
@@ -214,11 +261,7 @@ class InteractiveInputBox:
                         self.cursor_visible = not self.cursor_visible
                         self.last_blink = now
 
-                    live.update(
-                        self._create_input_panel(
-                            self.current_text, self.cursor_pos, self.cursor_visible
-                        )
-                    )
+                    live.update(self._create_combined_panel())
 
                     # Check input - read all available characters at once for paste handling
                     ready, _, _ = select.select([sys.stdin], [], [], 0.05)
@@ -269,6 +312,31 @@ class InteractiveInputBox:
                         if not chars:
                             continue
                         
+                        # Check if we have an escape sequence (arrow keys)
+                        # Escape sequences come as: \x1b, [, A/B/C/D
+                        if len(chars) >= 3 and chars[0] == "\x1b" and chars[1] == "[":
+                            arrow_dir = chars[2]
+                            if arrow_dir in ("A", "B", "C", "D"):
+                                # This is an arrow key sequence
+                                # Handle it specially if palette is active
+                                if self.palette_active:
+                                    filtered = self.command_registry.filter(self.palette_query)
+                                    if arrow_dir == "A":  # Up arrow
+                                        if filtered:
+                                            self.palette_selected_index = (self.palette_selected_index - 1) % len(filtered)
+                                    elif arrow_dir == "B":  # Down arrow
+                                        if filtered:
+                                            self.palette_selected_index = (self.palette_selected_index + 1) % len(filtered)
+                                    # Skip other arrow directions (left/right) in palette mode
+                                    if arrow_dir in ("A", "B"):
+                                        continue
+                                # For non-palette mode or left/right arrows, continue with normal processing
+                                # Remove the arrow sequence and process as normal
+                                if len(chars) > 3:
+                                    chars = chars[3:]
+                                else:
+                                    continue
+                        
                         # If we got multiple chars, it's likely a paste
                         if len(chars) > 1:
                             paste_text = "".join(chars)
@@ -302,9 +370,109 @@ class InteractiveInputBox:
                     else:
                         continue
 
+                    # Handle palette mode
+                    if self.palette_active:
+                        filtered = self.command_registry.filter(self.palette_query)
+                        if not filtered:
+                            filtered = []
+
+                        # Handle Enter key - insert selected command
+                        if char in ("\r", "\n"):
+                            if filtered:
+                                selected_cmd = filtered[self.palette_selected_index]
+                                # Replace `/` + query with command template
+                                # The query text in current_text is from palette_start_pos+1 to cursor_pos
+                                text_before = self.current_text[: self.palette_start_pos]
+                                text_after = self.current_text[self.cursor_pos :]
+                                self.current_text = text_before + selected_cmd.template + text_after
+                                self.cursor_pos = self.palette_start_pos + len(selected_cmd.template)
+                                self.palette_active = False
+                                self.palette_query = ""
+                                continue
+                            else:
+                                # No matches, just exit palette
+                                self.palette_active = False
+                                self.palette_query = ""
+                                continue
+                        elif char == "\t":  # Tab - auto-complete first match
+                            if filtered:
+                                selected_cmd = filtered[0]
+                                # Replace `/` + query with command template
+                                text_before = self.current_text[: self.palette_start_pos]
+                                text_after = self.current_text[self.cursor_pos :]
+                                self.current_text = text_before + selected_cmd.template + text_after
+                                self.cursor_pos = self.palette_start_pos + len(selected_cmd.template)
+                                self.palette_active = False
+                                self.palette_query = ""
+                                continue
+                        elif char == "\x1b":  # Escape sequence
+                            ready, _, _ = select.select([sys.stdin], [], [], 0.01)
+                            if not ready:
+                                # Just Escape - cancel palette
+                                # Remove everything from palette_start_pos (the `/`) to cursor_pos (end of query)
+                                text_before = self.current_text[: self.palette_start_pos]
+                                text_after = self.current_text[self.cursor_pos :]
+                                self.current_text = text_before + text_after
+                                self.cursor_pos = self.palette_start_pos
+                                self.palette_active = False
+                                self.palette_query = ""
+                                continue
+
+                            next1 = sys.stdin.read(1)
+                            if not next1:
+                                continue
+
+                            # Handle arrow keys in palette mode
+                            if next1 == "[":
+                                ready, _, _ = select.select([sys.stdin], [], [], 0.01)
+                                next2 = sys.stdin.read(1) if ready else ""
+                                if next2 == "A":  # Up arrow
+                                    if filtered:
+                                        self.palette_selected_index = (self.palette_selected_index - 1) % len(
+                                            filtered
+                                        )
+                                elif next2 == "B":  # Down arrow
+                                    if filtered:
+                                        self.palette_selected_index = (self.palette_selected_index + 1) % len(
+                                            filtered
+                                        )
+                            continue
+                        elif char in ("\x7f", "\b"):  # Backspace in palette mode
+                            if self.cursor_pos > self.palette_start_pos:
+                                # Still have query characters to remove
+                                self.palette_query = self.palette_query[:-1] if len(self.palette_query) > 0 else ""
+                                self.palette_selected_index = 0
+                                # Remove from current_text
+                                self.current_text = (
+                                    self.current_text[: self.cursor_pos - 1]
+                                    + self.current_text[self.cursor_pos :]
+                                )
+                                self.cursor_pos -= 1
+                            else:
+                                # Backspace at `/` position - exit palette and remove `/`
+                                text_before = self.current_text[: self.palette_start_pos]
+                                text_after = self.current_text[self.palette_start_pos + 1 :]
+                                self.current_text = text_before + text_after
+                                self.cursor_pos = self.palette_start_pos
+                                self.palette_active = False
+                                self.palette_query = ""
+                            continue
+                        elif len(char) == 1 and ord(char) >= 32:  # Printable characters in palette mode
+                            self.palette_query += char
+                            self.palette_selected_index = 0
+                            # Also add to current_text
+                            self.current_text = (
+                                self.current_text[: self.cursor_pos]
+                                + char
+                                + self.current_text[self.cursor_pos :]
+                            )
+                            self.cursor_pos += 1
+                            continue
+
                     # Handle Enter key - Enter submits
                     if char in ("\r", "\n"):
-                        break  # Submit on Enter
+                        if not self.palette_active:  # Only submit if palette not active
+                            break  # Submit on Enter
                     elif char == "\x03":  # Ctrl+C
                         raise KeyboardInterrupt
                     elif char == "\x04":  # Ctrl+D - submit
@@ -390,12 +558,27 @@ class InteractiveInputBox:
                     elif char == "\x0a" or char == "\x0d":  # Already handled above
                         pass
                     elif len(char) == 1 and ord(char) >= 32:  # Printable characters
-                        self.current_text = (
-                            self.current_text[: self.cursor_pos]
-                            + char
-                            + self.current_text[self.cursor_pos :]
-                        )
-                        self.cursor_pos += 1
+                        # Check if `/` should activate palette
+                        if char == "/" and self._should_activate_palette(self.current_text, self.cursor_pos):
+                            self.palette_active = True
+                            self.palette_start_pos = self.cursor_pos
+                            self.palette_query = ""
+                            self.palette_selected_index = 0
+                            # Insert `/` into text
+                            self.current_text = (
+                                self.current_text[: self.cursor_pos]
+                                + char
+                                + self.current_text[self.cursor_pos :]
+                            )
+                            self.cursor_pos += 1
+                        else:
+                            # Normal character input
+                            self.current_text = (
+                                self.current_text[: self.cursor_pos]
+                                + char
+                                + self.current_text[self.cursor_pos :]
+                            )
+                            self.cursor_pos += 1
 
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
@@ -429,11 +612,48 @@ class InteractiveSelect:
         )
 
     def _create_select_panel(self, selected_idx: int) -> Panel:
-        """Create selection panel with choices and highlighted selection."""
+        """Create selection panel with choices and highlighted selection.
+        
+        Implements scrolling window that follows the cursor.
+        Window size is limited to a reasonable maximum (e.g., 15 items visible).
+        """
+        # Window configuration
+        MAX_VISIBLE = 15
+        total_choices = len(self.choices)
+        
+        # Calculate visible range with padding around selection
+        # Try to keep selected item in middle of visible window
+        window_size = min(MAX_VISIBLE, total_choices)
+        half_window = window_size // 2
+        
+        # Calculate start index for visible window
+        if total_choices <= window_size:
+            # All items fit, show all
+            start_idx = 0
+            end_idx = total_choices
+        else:
+            # Calculate window to keep selected item visible
+            start_idx = max(0, selected_idx - half_window)
+            end_idx = min(total_choices, start_idx + window_size)
+            
+            # Adjust if we're at the end
+            if end_idx - start_idx < window_size:
+                start_idx = max(0, end_idx - window_size)
+        
+        visible_choices = self.choices[start_idx:end_idx]
+        visible_start = start_idx
+        
         content = Text()
+        
+        # Show indicator if there are items above visible window
+        if start_idx > 0:
+            content.append("  ...", style="dim")
+            content.append(f" ({start_idx} more above)", style="dim")
+            content.append("\n")
 
-        for idx, choice in enumerate(self.choices):
-            is_selected = idx == selected_idx
+        for idx, choice in enumerate(visible_choices):
+            actual_idx = visible_start + idx
+            is_selected = actual_idx == selected_idx
 
             indicator = "❯ " if is_selected else "  "
             indicator_style = "bold cyan" if is_selected else "dim"
@@ -454,6 +674,12 @@ class InteractiveSelect:
 
             content.append("\n")
 
+        # Show indicator if there are items below visible window
+        if end_idx < total_choices:
+            content.append("  ...", style="dim")
+            content.append(f" ({total_choices - end_idx} more below)", style="dim")
+            content.append("\n")
+
         # Add hint with subtle separator
         content.append("\n", style="")
         content.append("─" * 40, style="dim")
@@ -465,6 +691,10 @@ class InteractiveSelect:
         content.append(" Select  │  ", style="dim")
         content.append("Ctrl+C", style="bold red")
         content.append(" Cancel", style="dim")
+        
+        # Show current position indicator
+        if total_choices > window_size:
+            content.append(f"  │  [{selected_idx + 1}/{total_choices}]", style="dim")
 
         return Panel(
             content,

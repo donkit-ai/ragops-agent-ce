@@ -54,3 +54,37 @@ class OllamaProvider(LLMProvider):
         message = data.get("message") or {}
         content = message.get("content") or ""
         return LLMResponse(content=content, raw=data)
+
+    def list_models(self) -> list[str]:
+        """Get list of available models from Ollama."""
+        try:
+            resp = self._client.get("/api/tags")
+            resp.raise_for_status()
+            data = resp.json()
+            models = data.get("models", [])
+            return [model.get("name", "") for model in models if model.get("name")]
+        except Exception:
+            # Fallback to common models
+            return [
+                "llama3.1",
+                "llama3",
+                "mistral",
+                "mixtral",
+                "phi3",
+                "codellama",
+            ]
+
+    def list_chat_models(self) -> list[str]:
+        """Get list of chat models (all Ollama models are chat models)."""
+        # Ollama models are chat models, but most don't support tool calling
+        # For agent use, we should filter to models that likely support it
+        all_models = self.list_models()
+        # Ollama models typically support basic chat, but tool calling support varies
+        # For now, return all models (user can select)
+        return all_models
+
+    def list_embedding_models(self) -> list[str]:
+        """Get list of embedding models."""
+        # Ollama doesn't typically have separate embedding models
+        # Embeddings are usually handled by the chat models themselves
+        return []

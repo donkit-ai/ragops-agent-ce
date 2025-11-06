@@ -42,6 +42,61 @@ class AzureOpenAIProvider(LLMProvider):
     def supports_streaming(self) -> bool:
         return True
 
+    def list_models(self) -> list[str]:
+        """Get list of available models from Azure OpenAI API."""
+        try:
+            models = self._client.models.list()
+            model_names = [model.id for model in models]
+            return sorted(model_names, reverse=True)
+        except Exception:
+            # Fallback to common models
+            return [
+                "gpt-4o",
+                "gpt-4o-mini",
+                "gpt-4-turbo",
+                "gpt-4",
+                "gpt-3.5-turbo",
+                "text-embedding-3-small",
+                "text-embedding-3-large",
+                "text-embedding-ada-002",
+            ]
+
+    def list_chat_models(self) -> list[str]:
+        """Get list of chat models with tool calling support."""
+        try:
+            models = self._client.models.list()
+            model_names = []
+            for model in models:
+                name = model.id
+                if (name.startswith("gpt-") or name.startswith("o1-")) and "embedding" not in name.lower():
+                    model_names.append(name)
+            return sorted(model_names, reverse=True)
+        except Exception:
+            return [
+                "gpt-4o",
+                "gpt-4o-mini",
+                "gpt-4-turbo",
+                "gpt-4",
+                "gpt-3.5-turbo",
+            ]
+
+    def list_embedding_models(self) -> list[str]:
+        """Get list of embedding models."""
+        try:
+            models = self._client.models.list()
+            model_names = []
+            for model in models:
+                name = model.id
+                if "embedding" in name.lower():
+                    model_names.append(name)
+            return sorted(model_names, reverse=True)
+        except Exception:
+            return [
+                "text-embedding-3-small",
+                "text-embedding-3-large",
+                "text-embedding-ada-002",
+            ]
+
     def _serialize_message(self, message: Message) -> dict[str, Any]:
         """Serialize message for Azure OpenAI API (arguments must be JSON string)."""
         msg_dict = message.model_dump(exclude_none=True)

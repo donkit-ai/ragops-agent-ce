@@ -267,14 +267,118 @@ def select_model_at_startup(
                 continue
 
         # If we get here, provider has credentials configured
-        # For now, we don't ask for specific model - just return provider
-        # Model can be specified later via CLI flags or in .env
+        # Now ask for model selection
+        console.print(f"\n✓ Selected: [green]{PROVIDERS[selected_provider]['display']}[/green]\n")
+        
+        # Try to get models from provider
+        models = []
+        try:
+            from ragops_agent_ce.config import load_settings
+            from ragops_agent_ce.llm.provider_factory import get_provider
+            
+            settings = load_settings()
+            # Temporarily set provider in settings for model listing
+            temp_settings = settings.model_copy(update={"llm_provider": selected_provider})
+            provider_instance = get_provider(temp_settings, llm_provider=selected_provider)
+            
+            if hasattr(provider_instance, 'list_chat_models'):
+                models = provider_instance.list_chat_models()
+            elif hasattr(provider_instance, 'list_models'):
+                models = provider_instance.list_models()
+        except Exception as e:
+            # If we can't get provider instance, use fallback
+            console.print(f"[dim]Note: Could not fetch models from provider API (using fallback list)[/dim]\n")
+        
+        # Fallback to common models if provider doesn't support listing or failed
+        if not models:
+            common_models = {
+                "openai": [
+                    "gpt-4o",
+                    "gpt-4o-mini",
+                    "gpt-4-turbo",
+                    "gpt-4",
+                    "gpt-3.5-turbo",
+                    "o1-preview",
+                    "o1-mini",
+                ],
+                "azure_openai": [
+                    "gpt-4o",
+                    "gpt-4o-mini",
+                    "gpt-4-turbo",
+                    "gpt-4",
+                    "gpt-3.5-turbo",
+                ],
+                "vertex": [
+                    "gemini-2.5-flash",
+                    "gemini-2.0-flash-exp",
+                    "gemini-1.5-pro",
+                    "gemini-1.5-flash",
+                    "gemini-pro",
+                ],
+                "ollama": [
+                    "llama3.1",
+                    "llama3",
+                    "mistral",
+                    "mixtral",
+                    "phi3",
+                    "codellama",
+                ],
+                "openrouter": [
+                    "openai/gpt-4o",
+                    "openai/gpt-4-turbo",
+                    "anthropic/claude-3.5-sonnet",
+                    "google/gemini-pro-1.5",
+                    "meta-llama/llama-3.1-70b-instruct",
+                ],
+                "anthropic": [
+                    "claude-3-5-sonnet-20241022",
+                    "claude-3-opus-20240229",
+                    "claude-3-sonnet-20240229",
+                    "claude-3-haiku-20240307",
+                ],
+            }
+            models = common_models.get(selected_provider, [])
+        
+        # Get latest model selection for this provider
+        latest_model = None
+        if latest_selection and latest_selection[0] == selected_provider:
+            latest_model = latest_selection[1]
+        
         model = None
+        if models:
+            # Build choices list
+            choices = []
+            for model_name in models:
+                choice = model_name
+                if model_name == latest_model:
+                    choice += " [bold cyan]← Last used[/bold cyan]"
+                choices.append(choice)
+            
+            # Add "Skip" option
+            choices.append("Skip (use default)")
+            
+            title = f"Select Model for {PROVIDERS[selected_provider]['display']}"
+            # Set default to latest model if available
+            default_index = None
+            if latest_model and latest_model in models:
+                default_index = models.index(latest_model)
+            selected_model_choice = interactive_select(choices, title=title, default_index=default_index)
+            
+            if selected_model_choice and selected_model_choice != "Skip (use default)":
+                # Extract model name (remove "← Last used" if present)
+                model = selected_model_choice.split(" [")[0].strip()
+                console.print(f"✓ Model selected: [green]{model}[/green]\n")
+            elif selected_model_choice == "Skip (use default)":
+                console.print("[dim]Using default model for this provider[/dim]\n")
+            # If None (cancelled), use None model
+        else:
+            console.print(
+                "[yellow]No models available for selection. "
+                "Model can be specified later via CLI flags or in .env file.[/yellow]\n"
+            )
 
         # Save selection
         save_model_selection(selected_provider, model)
-
-        console.print(f"\n✓ Selected: [green]{PROVIDERS[selected_provider]['display']}[/green]\n")
 
         return (selected_provider, model)
 
