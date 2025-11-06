@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import warnings
+
+warnings.filterwarnings("ignore")
 import json
 import os
 import tempfile
@@ -278,21 +281,21 @@ class VertexProvider(LLMProvider):
             if not text and not tool_calls:
                 try:
                     # Check for blocking reasons or errors
-                    if hasattr(response, 'candidates') and response.candidates:
+                    if hasattr(response, "candidates") and response.candidates:
                         cand = response.candidates[0]
-                        if hasattr(cand, 'finish_reason') and cand.finish_reason:
+                        if hasattr(cand, "finish_reason") and cand.finish_reason:
                             finish_reason = cand.finish_reason
-                            if finish_reason not in ('STOP', None):
+                            if finish_reason not in ("STOP", None):
                                 error_msg = f"Model finished with reason: {finish_reason}"
                                 logger.warning(error_msg)
                                 return LLMResponse(content=f"Warning: {error_msg}")
                     # Check for safety ratings that might block content
-                    if hasattr(response, 'candidates') and response.candidates:
+                    if hasattr(response, "candidates") and response.candidates:
                         cand = response.candidates[0]
-                        if hasattr(cand, 'safety_ratings'):
+                        if hasattr(cand, "safety_ratings"):
                             blocked = any(
-                                getattr(r, 'blocked', False) 
-                                for r in getattr(cand, 'safety_ratings', [])
+                                getattr(r, "blocked", False)
+                                for r in getattr(cand, "safety_ratings", [])
                             )
                             if blocked:
                                 error_msg = "Response was blocked by safety filters"
@@ -303,7 +306,9 @@ class VertexProvider(LLMProvider):
             return LLMResponse(content=text, tool_calls=tool_calls, raw=raw)
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Error generating content with model '{model_name}': {error_msg}", exc_info=True)
+            logger.error(
+                f"Error generating content with model '{model_name}': {error_msg}", exc_info=True
+            )
             # Return error message instead of empty response so user can see what went wrong
             return LLMResponse(content=f"Error: {error_msg}")
 
@@ -391,13 +396,19 @@ class VertexProvider(LLMProvider):
             # Try to list models from the client
             # Note: Google Gen AI SDK may not have a direct list_models method
             # We'll try to access it if available
-            if hasattr(self._client, 'models') and hasattr(self._client.models, 'list'):
+            if hasattr(self._client, "models") and hasattr(self._client.models, "list"):
                 models = self._client.models.list()
-                return [model.name.split('/')[-1] if '/' in model.name else model.name for model in models]
+                return [
+                    model.name.split("/")[-1] if "/" in model.name else model.name
+                    for model in models
+                ]
             # Fallback: try to get models from the client's models attribute
-            if hasattr(self._client, 'models') and hasattr(self._client.models, 'list_models'):
+            if hasattr(self._client, "models") and hasattr(self._client.models, "list_models"):
                 models = self._client.models.list_models()
-                return [model.name.split('/')[-1] if '/' in model.name else model.name for model in models]
+                return [
+                    model.name.split("/")[-1] if "/" in model.name else model.name
+                    for model in models
+                ]
         except Exception:
             pass
         # Fallback to common Vertex AI models
@@ -416,9 +427,7 @@ class VertexProvider(LLMProvider):
         all_models = self.list_models()
         # Filter to Gemini models (exclude embedding models if any)
         chat_models = [
-            m
-            for m in all_models
-            if "gemini" in m.lower() and "embedding" not in m.lower()
+            m for m in all_models if "gemini" in m.lower() and "embedding" not in m.lower()
         ]
         if not chat_models:
             # Fallback to common Gemini models
@@ -554,6 +563,8 @@ class VertexProvider(LLMProvider):
 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Error streaming content with model '{model_name}': {error_msg}", exc_info=True)
+            logger.error(
+                f"Error streaming content with model '{model_name}': {error_msg}", exc_info=True
+            )
             # Yield error message instead of empty response
             yield LLMResponse(content=f"Error: {error_msg}")

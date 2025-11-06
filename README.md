@@ -293,6 +293,38 @@ Manages project checklists and progress tracking.
 - `get_checklist` — Get current checklist
 - `update_checklist_item` — Update item status
 
+### `donkit-ragops-mcp`
+
+**Unified MCP server** that combines all servers above into a single endpoint
+
+```bash
+# Run unified server
+donkit-ragops-mcp
+```
+
+**Claude Desktop configuration:**
+
+```json
+{
+  "mcpServers": {
+    "donkit-ragops-mcp": {
+      "command": "donkit-ragops-mcp"
+    }
+  }
+}
+```
+
+All tools are available with prefixes:
+- `checklist_*` — Checklist management
+- `chunker_*` — Document chunking  
+- `compose_*` — Docker Compose orchestration
+- `planner_*` — RAG configuration planning
+- `query_*` — RAG query execution
+- `reader_*` — Document reading/parsing
+- `vectorstore_*` — Vector store operations
+
+📖 **[Full documentation](docs/UNIFIED_SERVER.md)**
+
 ## Examples
 
 ### Basic RAG Pipeline

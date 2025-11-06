@@ -9,6 +9,14 @@ Provides tools to:
 - Get logs
 """
 
+import warnings
+
+# Suppress all warnings immediately, before any other imports
+warnings.filterwarnings("ignore")
+# Suppress warnings from importlib bootstrap (SWIG-related)
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="importlib._bootstrap")
+# Suppress all DeprecationWarnings globally
+warnings.simplefilter("ignore", DeprecationWarning)
 import base64
 import json
 import os

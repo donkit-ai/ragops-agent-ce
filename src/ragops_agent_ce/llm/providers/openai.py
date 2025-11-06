@@ -65,7 +65,7 @@ class OpenAIProvider(LLMProvider):
 
     def list_chat_models(self) -> list[str]:
         """Get list of chat models with tool calling support.
-        
+
         Note: models.list() returns models available for your API key,
         but final availability is validated when a model is selected.
         Some models may be restricted by region, subscription plan, or early access.

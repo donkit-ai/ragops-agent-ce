@@ -269,26 +269,28 @@ def select_model_at_startup(
         # If we get here, provider has credentials configured
         # Now ask for model selection
         console.print(f"\n✓ Selected: [green]{PROVIDERS[selected_provider]['display']}[/green]\n")
-        
+
         # Try to get models from provider
         models = []
         try:
             from ragops_agent_ce.config import load_settings
             from ragops_agent_ce.llm.provider_factory import get_provider
-            
+
             settings = load_settings()
             # Temporarily set provider in settings for model listing
             temp_settings = settings.model_copy(update={"llm_provider": selected_provider})
             provider_instance = get_provider(temp_settings, llm_provider=selected_provider)
-            
-            if hasattr(provider_instance, 'list_chat_models'):
+
+            if hasattr(provider_instance, "list_chat_models"):
                 models = provider_instance.list_chat_models()
-            elif hasattr(provider_instance, 'list_models'):
+            elif hasattr(provider_instance, "list_models"):
                 models = provider_instance.list_models()
-        except Exception as e:
+        except Exception:
             # If we can't get provider instance, use fallback
-            console.print(f"[dim]Note: Could not fetch models from provider API (using fallback list)[/dim]\n")
-        
+            console.print(
+                "[dim]Note: Could not fetch models from provider API (using fallback list)[/dim]\n"
+            )
+
         # Fallback to common models if provider doesn't support listing or failed
         if not models:
             common_models = {
@@ -338,12 +340,12 @@ def select_model_at_startup(
                 ],
             }
             models = common_models.get(selected_provider, [])
-        
+
         # Get latest model selection for this provider
         latest_model = None
         if latest_selection and latest_selection[0] == selected_provider:
             latest_model = latest_selection[1]
-        
+
         model = None
         if models:
             # Build choices list
@@ -353,29 +355,31 @@ def select_model_at_startup(
                 if model_name == latest_model:
                     choice += " [bold cyan]← Last used[/bold cyan]"
                 choices.append(choice)
-            
+
             # Add "Skip" option
             choices.append("Skip (use default)")
-            
+
             title = f"Select Model for {PROVIDERS[selected_provider]['display']}"
             # Set default to latest model if available
             default_index = None
             if latest_model and latest_model in models:
                 default_index = models.index(latest_model)
-            selected_model_choice = interactive_select(choices, title=title, default_index=default_index)
-            
+            selected_model_choice = interactive_select(
+                choices, title=title, default_index=default_index
+            )
+
             if selected_model_choice and selected_model_choice != "Skip (use default)":
                 # Extract model name (remove "← Last used" if present)
                 model = selected_model_choice.split(" [")[0].strip()
-                
+
                 # Validate model by trying to use it
                 try:
                     from ragops_agent_ce.llm.types import Message
-                    
+
                     # Test if model is actually available
                     test_messages = [Message(role="user", content="test")]
                     try:
-                        test_response = provider_instance.generate(
+                        provider_instance.generate(
                             test_messages,
                             model=model,
                             max_tokens=1,
@@ -385,19 +389,28 @@ def select_model_at_startup(
                     except Exception as model_error:
                         # Model is not available
                         error_msg = str(model_error)
-                        if "model" in error_msg.lower() and ("not found" in error_msg.lower() or "does not exist" in error_msg.lower() or "not available" in error_msg.lower()):
-                            friendly_msg = f"Model '{model}' is not available or not accessible with your API key."
+                        if "model" in error_msg.lower() and (
+                            "not found" in error_msg.lower()
+                            or "does not exist" in error_msg.lower()
+                            or "not available" in error_msg.lower()
+                        ):
+                            friendly_msg = (
+                                f"Model '{model}' is not available or not accessible "
+                                "with your API key."
+                            )
                         else:
                             friendly_msg = f"Model '{model}' is not available: {error_msg}"
                         console.print(f"[bold red]Error:[/bold red] {friendly_msg}")
                         console.print("[yellow]Please select a different model.[/yellow]\n")
                         # Ask user to select again
-                        retry_model = interactive_select(choices, title=title, default_index=default_index)
+                        retry_model = interactive_select(
+                            choices, title=title, default_index=default_index
+                        )
                         if retry_model and retry_model != "Skip (use default)":
                             model = retry_model.split(" [")[0].strip()
                             # Try validation again (but don't loop forever)
                             try:
-                                test_response = provider_instance.generate(
+                                provider_instance.generate(
                                     [Message(role="user", content="test")],
                                     model=model,
                                     max_tokens=1,
@@ -405,16 +418,23 @@ def select_model_at_startup(
                                 console.print(f"✓ Model selected: [green]{model}[/green]\n")
                             except Exception:
                                 # If still fails, set it anyway but warn
-                                console.print(f"[yellow]Warning:[/yellow] Model '{model}' validation failed, but it will be set anyway.\n")
+                                console.print(
+                                    "[yellow]Warning:[/yellow] Model validation failed, "
+                                    "but it will be set anyway.\n"
+                                )
                                 model = None  # Set to None to use default
                         else:
                             model = None  # User skipped or cancelled
                 except Exception as e:
                     # If validation itself fails, still set the model but warn
-                    console.print(f"[yellow]Warning:[/yellow] Could not validate model '{model}': {e}")
-                    console.print(f"[dim]Model '{model}' will be set, but may not be available.[/dim]\n")
+                    console.print(
+                        f"[yellow]Warning:[/yellow] Could not validate model '{model}': {e}"
+                    )
+                    console.print(
+                        f"[dim]Model '{model}' will be set, but may not be available.[/dim]\n"
+                    )
                     model = None  # Set to None to be safe
-                    
+
             elif selected_model_choice == "Skip (use default)":
                 console.print("[dim]Using default model for this provider[/dim]\n")
                 model = None

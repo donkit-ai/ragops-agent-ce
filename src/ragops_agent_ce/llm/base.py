@@ -51,7 +51,7 @@ class LLMProvider(ABC):
 
     def list_models(self) -> list[str]:
         """Get list of available models from the provider.
-        
+
         Returns:
             List of model names available from this provider.
             If listing is not supported, returns empty list.
@@ -60,7 +60,7 @@ class LLMProvider(ABC):
 
     def list_chat_models(self) -> list[str]:
         """Get list of chat models suitable for agent use (with tool calling support).
-        
+
         Returns:
             List of model names that support chat completions and tool calling.
             Filters out embedding-only models and models without tool support.
@@ -80,7 +80,7 @@ class LLMProvider(ABC):
 
     def list_embedding_models(self) -> list[str]:
         """Get list of embedding models suitable for RAG.
-        
+
         Returns:
             List of model names that support embeddings.
         """

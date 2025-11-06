@@ -16,7 +16,8 @@ from rich.panel import Panel
 from rich.style import Style
 from rich.text import Text
 
-from .command_palette import CommandPalette, CommandRegistry
+from .command_palette import CommandPalette
+from .command_palette import CommandRegistry
 
 if TYPE_CHECKING:
     import termios
@@ -145,7 +146,9 @@ class InteractiveInputBox:
                 content.append("ype your message... ", style="dim")
             else:
                 content.append("Type your message... ", style="dim")
-            content.append("(Enter to submit, Alt+Enter for newline, :q to quit)", style="yellow dim")
+            content.append(
+                "(Enter to submit, Alt+Enter for newline, :q to quit)", style="yellow dim"
+            )
         else:
             # Render multiline text with cursor
             for line_idx, line_text in enumerate(lines):
@@ -188,7 +191,10 @@ class InteractiveInputBox:
         )
 
     def _should_activate_palette(self, text: str, cursor_pos: int) -> bool:
-        """Check if command palette should be activated (when / is at start of line or after space)."""
+        """
+        Check if command palette should be activated
+        (when / is at start of line or after space).
+        """
         if cursor_pos == 0:
             return True  # At start of line
         if cursor_pos > 0 and text[cursor_pos - 1] in (" ", "\n"):
@@ -218,7 +224,11 @@ class InteractiveInputBox:
             palette_height = min(15, max(6, len(filtered) + 4) if filtered else 6)
             layout.split_column(
                 Layout(palette_panel, size=palette_height),
-                Layout(self._create_input_panel(self.current_text, self.cursor_pos, self.cursor_visible)),
+                Layout(
+                    self._create_input_panel(
+                        self.current_text, self.cursor_pos, self.cursor_visible
+                    )
+                ),
             )
             return layout
         return self._create_input_panel(self.current_text, self.cursor_pos, self.cursor_visible)
@@ -268,22 +278,23 @@ class InteractiveInputBox:
                     if ready:
                         # Read all available characters immediately
                         import os
+
                         chars = []
-                        
+
                         # First read - get what's immediately available
                         try:
                             chunk = os.read(fd, 4096)
                             if chunk:
-                                text_chunk = chunk.decode('utf-8', errors='replace')
+                                text_chunk = chunk.decode("utf-8", errors="replace")
                                 chars.extend(list(text_chunk))
                         except (BlockingIOError, OSError, UnicodeDecodeError):
                             pass
-                        
-                        # If we got at least one char, check for more with small delay (paste indicator)
+
+                        # If we got at least one char, check for more (paste indicator)
                         if chars:
                             # Small delay to allow more characters to arrive (for paste)
                             time.sleep(0.01)
-                            
+
                             # Read additional characters that might have arrived
                             max_additional_reads = 5
                             for _ in range(max_additional_reads):
@@ -293,25 +304,25 @@ class InteractiveInputBox:
                                         break
                                     chunk = os.read(fd, 4096)
                                     if chunk:
-                                        text_chunk = chunk.decode('utf-8', errors='replace')
+                                        text_chunk = chunk.decode("utf-8", errors="replace")
                                         chars.extend(list(text_chunk))
                                     else:
                                         break
                                 except (BlockingIOError, OSError, UnicodeDecodeError):
                                     break
-                        
+
                         # If no chars from os.read, try sys.stdin.read
                         if not chars:
                             try:
                                 char = sys.stdin.read(1)
                                 if char:
                                     chars = [char]
-                            except:
+                            except Exception:
                                 pass
-                        
+
                         if not chars:
                             continue
-                        
+
                         # Check if we have an escape sequence (arrow keys)
                         # Escape sequences come as: \x1b, [, A/B/C/D
                         if len(chars) >= 3 and chars[0] == "\x1b" and chars[1] == "[":
@@ -323,24 +334,28 @@ class InteractiveInputBox:
                                     filtered = self.command_registry.filter(self.palette_query)
                                     if arrow_dir == "A":  # Up arrow
                                         if filtered:
-                                            self.palette_selected_index = (self.palette_selected_index - 1) % len(filtered)
+                                            self.palette_selected_index = (
+                                                self.palette_selected_index - 1
+                                            ) % len(filtered)
                                     elif arrow_dir == "B":  # Down arrow
                                         if filtered:
-                                            self.palette_selected_index = (self.palette_selected_index + 1) % len(filtered)
+                                            self.palette_selected_index = (
+                                                self.palette_selected_index + 1
+                                            ) % len(filtered)
                                     # Skip other arrow directions (left/right) in palette mode
                                     if arrow_dir in ("A", "B"):
                                         continue
-                                # For non-palette mode or left/right arrows, continue with normal processing
-                                # Remove the arrow sequence and process as normal
+                                # For non-palette mode or left/right arrows, continue
+                                # with normal processing. Remove the arrow sequence
                                 if len(chars) > 3:
                                     chars = chars[3:]
                                 else:
                                     continue
-                        
+
                         # If we got multiple chars, it's likely a paste
                         if len(chars) > 1:
                             paste_text = "".join(chars)
-                            
+
                             # Filter out control chars except newlines
                             filtered_chars = []
                             for c in paste_text:
@@ -348,7 +363,7 @@ class InteractiveInputBox:
                                     filtered_chars.append("\n" if c == "\r" else c)
                                 elif len(c) == 1 and ord(c) >= 32:
                                     filtered_chars.append(c)
-                            
+
                             if filtered_chars:
                                 text_to_insert = "".join(filtered_chars)
                                 self.current_text = (
@@ -364,7 +379,7 @@ class InteractiveInputBox:
                                     )
                                 )
                                 continue
-                        
+
                         # Single character input
                         char = chars[0]
                     else:
@@ -381,11 +396,13 @@ class InteractiveInputBox:
                             if filtered:
                                 selected_cmd = filtered[self.palette_selected_index]
                                 # Replace `/` + query with command template
-                                # The query text in current_text is from palette_start_pos+1 to cursor_pos
+                                # Query text: palette_start_pos+1 to cursor_pos
                                 text_before = self.current_text[: self.palette_start_pos]
                                 text_after = self.current_text[self.cursor_pos :]
                                 self.current_text = text_before + selected_cmd.template + text_after
-                                self.cursor_pos = self.palette_start_pos + len(selected_cmd.template)
+                                self.cursor_pos = self.palette_start_pos + len(
+                                    selected_cmd.template
+                                )
                                 self.palette_active = False
                                 self.palette_query = ""
                                 continue
@@ -401,7 +418,9 @@ class InteractiveInputBox:
                                 text_before = self.current_text[: self.palette_start_pos]
                                 text_after = self.current_text[self.cursor_pos :]
                                 self.current_text = text_before + selected_cmd.template + text_after
-                                self.cursor_pos = self.palette_start_pos + len(selected_cmd.template)
+                                self.cursor_pos = self.palette_start_pos + len(
+                                    selected_cmd.template
+                                )
                                 self.palette_active = False
                                 self.palette_query = ""
                                 continue
@@ -409,7 +428,7 @@ class InteractiveInputBox:
                             ready, _, _ = select.select([sys.stdin], [], [], 0.01)
                             if not ready:
                                 # Just Escape - cancel palette
-                                # Remove everything from palette_start_pos (the `/`) to cursor_pos (end of query)
+                                # Remove from palette_start_pos (the `/`) to cursor_pos
                                 text_before = self.current_text[: self.palette_start_pos]
                                 text_after = self.current_text[self.cursor_pos :]
                                 self.current_text = text_before + text_after
@@ -428,19 +447,21 @@ class InteractiveInputBox:
                                 next2 = sys.stdin.read(1) if ready else ""
                                 if next2 == "A":  # Up arrow
                                     if filtered:
-                                        self.palette_selected_index = (self.palette_selected_index - 1) % len(
-                                            filtered
-                                        )
+                                        self.palette_selected_index = (
+                                            self.palette_selected_index - 1
+                                        ) % len(filtered)
                                 elif next2 == "B":  # Down arrow
                                     if filtered:
-                                        self.palette_selected_index = (self.palette_selected_index + 1) % len(
-                                            filtered
-                                        )
+                                        self.palette_selected_index = (
+                                            self.palette_selected_index + 1
+                                        ) % len(filtered)
                             continue
                         elif char in ("\x7f", "\b"):  # Backspace in palette mode
                             if self.cursor_pos > self.palette_start_pos:
                                 # Still have query characters to remove
-                                self.palette_query = self.palette_query[:-1] if len(self.palette_query) > 0 else ""
+                                self.palette_query = (
+                                    self.palette_query[:-1] if len(self.palette_query) > 0 else ""
+                                )
                                 self.palette_selected_index = 0
                                 # Remove from current_text
                                 self.current_text = (
@@ -457,7 +478,9 @@ class InteractiveInputBox:
                                 self.palette_active = False
                                 self.palette_query = ""
                             continue
-                        elif len(char) == 1 and ord(char) >= 32:  # Printable characters in palette mode
+                        elif (
+                            len(char) == 1 and ord(char) >= 32
+                        ):  # Printable characters in palette mode
                             self.palette_query += char
                             self.palette_selected_index = 0
                             # Also add to current_text
@@ -492,11 +515,11 @@ class InteractiveInputBox:
                         ready, _, _ = select.select([sys.stdin], [], [], 0.01)
                         if not ready:
                             continue  # Just Escape key, ignore
-                        
+
                         next1 = sys.stdin.read(1)
                         if not next1:
                             continue
-                        
+
                         # Check for Alt+Enter (Esc+Enter) - inserts newline
                         if next1 in ("\r", "\n"):
                             # Alt+Enter inserts newline
@@ -507,22 +530,30 @@ class InteractiveInputBox:
                             )
                             self.cursor_pos += 1
                             continue
-                        
+
                         # Read next character for arrow keys
                         ready, _, _ = select.select([sys.stdin], [], [], 0.01)
                         next2 = sys.stdin.read(1) if ready else ""
-                        
+
                         if next1 == "[":
                             if next2 == "D":  # Left arrow
                                 if self.cursor_pos > 0:
                                     # Check if we're at the start of a line (after newline)
-                                    if self.cursor_pos > 0 and self.current_text[self.cursor_pos - 1] == "\n":
+                                    if (
+                                        self.cursor_pos > 0
+                                        and self.current_text[self.cursor_pos - 1] == "\n"
+                                    ):
                                         # Already at start of line, move to end of previous line
-                                        line, col = self._get_cursor_position(self.current_text, self.cursor_pos)
+                                        line, col = self._get_cursor_position(
+                                            self.current_text, self.cursor_pos
+                                        )
                                         if line > 0:
                                             lines = self._get_text_lines(self.current_text)
                                             prev_line = lines[line - 1]
-                                            self.cursor_pos = sum(len(l) + 1 for l in lines[:line-1]) + len(prev_line)
+                                            self.cursor_pos = sum(
+                                                len(line_text) + 1
+                                                for line_text in lines[: line - 1]
+                                            ) + len(prev_line)
                                     else:
                                         self.cursor_pos -= 1
                             elif next2 == "C":  # Right arrow
@@ -535,31 +566,43 @@ class InteractiveInputBox:
                                         self.cursor_pos += 1
                             elif next2 == "A":  # Up arrow
                                 # Move cursor up one line
-                                line, col = self._get_cursor_position(self.current_text, self.cursor_pos)
+                                line, col = self._get_cursor_position(
+                                    self.current_text, self.cursor_pos
+                                )
                                 if line > 0:
                                     lines = self._get_text_lines(self.current_text)
                                     prev_line = lines[line - 1]
-                                    # Move to same column in previous line, or end of line if shorter
+                                    # Move to same column in previous line, or end if shorter
                                     target_col = min(col, len(prev_line))
-                                    # Calculate new absolute position: sum of all characters before target line
-                                    self.cursor_pos = sum(len(l) + 1 for l in lines[:line-1]) + target_col
+                                    # Calculate new absolute position
+                                    self.cursor_pos = (
+                                        sum(len(line_text) + 1 for line_text in lines[: line - 1])
+                                        + target_col
+                                    )
                             elif next2 == "B":  # Down arrow
                                 # Move cursor down one line
-                                line, col = self._get_cursor_position(self.current_text, self.cursor_pos)
+                                line, col = self._get_cursor_position(
+                                    self.current_text, self.cursor_pos
+                                )
                                 lines = self._get_text_lines(self.current_text)
                                 if line < len(lines) - 1:
                                     next_line = lines[line + 1]
-                                    # Move to same column in next line, or end of line if shorter
+                                    # Move to same column in next line, or end if shorter
                                     target_col = min(col, len(next_line))
-                                    # Calculate new absolute position: sum of all characters before target line
-                                    self.cursor_pos = sum(len(l) + 1 for l in lines[:line+1]) + target_col
+                                    # Calculate new absolute position
+                                    self.cursor_pos = (
+                                        sum(len(line_text) + 1 for line_text in lines[: line + 1])
+                                        + target_col
+                                    )
                             elif next2 == "\r":  # Esc+Enter = submit
                                 break
                     elif char == "\x0a" or char == "\x0d":  # Already handled above
                         pass
                     elif len(char) == 1 and ord(char) >= 32:  # Printable characters
                         # Check if `/` should activate palette
-                        if char == "/" and self._should_activate_palette(self.current_text, self.cursor_pos):
+                        if char == "/" and self._should_activate_palette(
+                            self.current_text, self.cursor_pos
+                        ):
                             self.palette_active = True
                             self.palette_start_pos = self.cursor_pos
                             self.palette_query = ""
@@ -613,19 +656,19 @@ class InteractiveSelect:
 
     def _create_select_panel(self, selected_idx: int) -> Panel:
         """Create selection panel with choices and highlighted selection.
-        
+
         Implements scrolling window that follows the cursor.
         Window size is limited to a reasonable maximum (e.g., 15 items visible).
         """
         # Window configuration
         MAX_VISIBLE = 15
         total_choices = len(self.choices)
-        
+
         # Calculate visible range with padding around selection
         # Try to keep selected item in middle of visible window
         window_size = min(MAX_VISIBLE, total_choices)
         half_window = window_size // 2
-        
+
         # Calculate start index for visible window
         if total_choices <= window_size:
             # All items fit, show all
@@ -635,16 +678,16 @@ class InteractiveSelect:
             # Calculate window to keep selected item visible
             start_idx = max(0, selected_idx - half_window)
             end_idx = min(total_choices, start_idx + window_size)
-            
+
             # Adjust if we're at the end
             if end_idx - start_idx < window_size:
                 start_idx = max(0, end_idx - window_size)
-        
+
         visible_choices = self.choices[start_idx:end_idx]
         visible_start = start_idx
-        
+
         content = Text()
-        
+
         # Show indicator if there are items above visible window
         if start_idx > 0:
             content.append("  ...", style="dim")
@@ -691,7 +734,7 @@ class InteractiveSelect:
         content.append(" Select  │  ", style="dim")
         content.append("Ctrl+C", style="bold red")
         content.append(" Cancel", style="dim")
-        
+
         # Show current position indicator
         if total_choices > window_size:
             content.append(f"  │  [{selected_idx + 1}/{total_choices}]", style="dim")

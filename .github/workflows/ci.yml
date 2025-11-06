@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Run tests
+    name: Test and lint
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
@@ -25,6 +25,9 @@ jobs:
           pip install --upgrade pip
           pip install poetry
           poetry install
+
+      - name: Run ruff check
+        run: poetry run ruff check .
 
       - name: Run pytest
         run: |

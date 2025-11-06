@@ -394,7 +394,11 @@ class CommandPalette:
                         # Might be arrow key, read next chars
                         next1 = sys.stdin.read(1) if ready else ""
                         if next1 == "[":
-                            next2 = sys.stdin.read(1) if select.select([sys.stdin], [], [], 0.01)[0] else ""
+                            next2 = (
+                                sys.stdin.read(1)
+                                if select.select([sys.stdin], [], [], 0.01)[0]
+                                else ""
+                            )
                             if next2 == "A":  # Up arrow
                                 if self.filtered_commands:
                                     self.selected_index = (self.selected_index - 1) % len(
@@ -418,4 +422,3 @@ class CommandPalette:
                     termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
         return None
-

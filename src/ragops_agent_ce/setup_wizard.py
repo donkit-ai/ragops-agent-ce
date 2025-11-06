@@ -212,7 +212,7 @@ class SetupWizard:
         use_custom_model = interactive_confirm("Specify model name?", default=False)
 
         if use_custom_model:
-            model = Prompt.ask("Enter model name", default="gpt-4o-mini")
+            model = Prompt.ask("Enter model name", default="gpt-5")
             self.config["RAGOPS_LLM_MODEL"] = model
             console.print(f"✓ Model: [green]{model}[/green]")
 
@@ -291,7 +291,7 @@ class SetupWizard:
                 return self._configure_azure_openai()
 
         api_version = Prompt.ask("Enter API version", default="2024-02-15-preview")
-        deployment = Prompt.ask("Enter chat completion deployment name (e.g., gpt-4o)")
+        deployment = Prompt.ask("Enter chat completion deployment name (e.g., gpt-5)")
         embeddings_deployment = Prompt.ask(
             "Enter embeddings deployment name (e.g., text-embedding-ada-002)",
             default="text-embedding-ada-002",
