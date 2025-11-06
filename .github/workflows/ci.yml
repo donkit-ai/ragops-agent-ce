@@ -37,6 +37,72 @@ jobs:
           fi
           exit $rc
 
+  check-version:
+    name: Check version bump
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: |
+          pip install --upgrade pip
+          pip install poetry
+
+      - name: Check version was bumped
+        run: |
+          set -e
+          
+          # Get version from PR branch
+          PR_VERSION=$(poetry version --short)
+          echo "PR version: $PR_VERSION"
+          
+          # Get version from main branch
+          git fetch origin main
+          git checkout origin/main -- pyproject.toml
+          MAIN_VERSION=$(poetry version --short)
+          echo "Main version: $MAIN_VERSION"
+          
+          # Restore PR version
+          git checkout HEAD -- pyproject.toml
+          
+          # Compare versions
+          if [ "$PR_VERSION" = "$MAIN_VERSION" ]; then
+            echo "❌ Error: Version was not bumped in this PR"
+            echo "   Current version in main: $MAIN_VERSION"
+            echo "   Version in PR: $PR_VERSION"
+            echo ""
+            echo "Please bump the version in pyproject.toml before merging."
+            echo "Use: poetry version patch|minor|major"
+            exit 1
+          fi
+          
+          # Install packaging for semver comparison
+          pip install packaging
+          
+          # Check if version is greater using proper semver comparison
+          python3 -c "
+            from packaging.version import Version
+            import sys
+            
+            main_ver = Version('$MAIN_VERSION')
+            pr_ver = Version('$PR_VERSION')
+            
+            if pr_ver <= main_ver:
+                print(f'❌ Error: PR version ({pr_ver}) must be greater than main version ({main_ver})')
+                sys.exit(1)
+                
+            print(f'✅ Version bump detected: {main_ver} → {pr_ver}')
+            "
+
   publish:
     name: Publish to public PyPI
     runs-on: ubuntu-latest
@@ -62,18 +128,6 @@ jobs:
           poetry config virtualenvs.create false
           poetry config pypi-token.pypi "$PYPI_TOKEN"
 
-      - name: Bump version and sync
-        run: |
-          set -e
-          # Increase patch version (0.3.1 -> 0.3.2)
-          poetry version patch
-          NEW_VERSION=$(poetry version --short)
-          echo "New version: $NEW_VERSION"
-          
-          # Update version in __init__.py to match pyproject.toml
-          sed -i "s/^__version__ = \".*\"/__version__ = \"$NEW_VERSION\"/" src/ragops_agent_ce/__init__.py
-          echo "✅ Version synced: $NEW_VERSION"
-
       - name: Build and publish to PyPI.org
         id: publish
         run: |
@@ -83,12 +137,5 @@ jobs:
           echo "Publishing to public PyPI.org"
           poetry publish
           echo "✅ Successfully published to PyPI!"
-          poetry version --short
-
-      - name: Note version bump
-        if: steps.publish.outcome == 'success'
-        run: |
           VERSION=$(poetry version --short)
-          echo "✅ Version $VERSION published to PyPI"
-          echo "⚠️  Note: Version bump commit skipped due to branch protection rules"
-          echo "   To update version in repo, create a PR with version changes"
+          echo "📦 Published version: $VERSION"
