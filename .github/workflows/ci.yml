@@ -85,23 +85,15 @@ jobs:
             exit 1
           fi
           
-          # Install packaging for semver comparison
-          pip install packaging
+          # Check if version is greater using sort -V (version sort)
+          SORTED_HIGHEST=$(printf "%s\n%s" "$MAIN_VERSION" "$PR_VERSION" | sort -rV | head -n1)
           
-          # Check if version is greater using proper semver comparison
-          python3 << EOF
-from packaging.version import Version
-import sys
-
-main_ver = Version('$MAIN_VERSION')
-pr_ver = Version('$PR_VERSION')
-
-if pr_ver <= main_ver:
-    print(f'❌ Error: PR version ({pr_ver}) must be greater than main version ({main_ver})')
-    sys.exit(1)
-
-print(f'✅ Version bump detected: {main_ver} → {pr_ver}')
-EOF
+          if [ "$SORTED_HIGHEST" = "$MAIN_VERSION" ]; then
+            echo "❌ Error: PR version ($PR_VERSION) must be greater than main version ($MAIN_VERSION)"
+            exit 1
+          fi
+          
+          echo "✅ Version bump detected: $MAIN_VERSION → $PR_VERSION"
 
   publish:
     name: Publish to public PyPI
