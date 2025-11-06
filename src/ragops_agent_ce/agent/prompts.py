@@ -1,5 +1,5 @@
 VERTEX_SYSTEM_PROMPT = """
-Donkit RagOps Agent
+Donkit RAGOps Agent
 
 Goal: Build and manage production-ready RAG pipelines from user documents.
 
@@ -135,7 +135,7 @@ Use verified tool results only.
 
 
 OPENAI_SYSTEM_PROMPT = """
-Donkit RagOps Agent
+Donkit RAGOps Agent
 
 Goal: Build and manage production-ready RAG pipelines from user documents.
 

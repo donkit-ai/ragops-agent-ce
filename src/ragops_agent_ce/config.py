@@ -10,7 +10,7 @@ from pydantic_settings import SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application settings for RagOps Agent CE."""
+    """Application settings for RAGOps Agent CE."""
 
     db_path: str = Field(default="./ragops-agent-ce/ragops.db")
 

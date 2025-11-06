@@ -1,11 +1,28 @@
 from __future__ import annotations
 
+import warnings
+
+# Suppress warnings from transitive dependencies we don't control
+#
+# See __main__.py for detailed explanation of why these warnings are suppressed.
+# These are issues in dependencies (pypdf, matplotlib) that don't affect our functionality.
+warnings.filterwarnings("ignore", message=".*Unable to import Axes3D.*", module="matplotlib")
+warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib.projections")
+warnings.filterwarnings("ignore", message=".*ARC4 has been moved.*")
+try:
+    from cryptography.utils import CryptographyDeprecationWarning
+
+    warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
+except ImportError:
+    pass
+
 import asyncio
 import json
 import os
 import re
 import shlex
 import time
+from pathlib import Path
 
 import typer
 from loguru import logger
@@ -99,7 +116,7 @@ def main(
         help="Render checklist panel at start and after each step",
     ),
 ) -> None:
-    """RagOps Agent CE - LLM-powered CLI agent for building RAG pipelines."""
+    """RAGOps Agent CE - LLM-powered CLI agent for building RAG pipelines."""
     # Setup logging according to .env / settings
     try:
         setup_logging(load_settings())
@@ -280,12 +297,12 @@ async def _astart_repl(
         transcript.append(f"\n\n{_time_str()} [bold blue]you>[/bold blue] {escape(text)}")
 
     def _start_agent_placeholder() -> int:
-        transcript.append(f"\n{_time_str()} [bold green]RagOps Agent>[/bold green] ")
+        transcript.append(f"\n{_time_str()} [bold green]RAGOps Agent>[/bold green] ")
         return len(transcript) - 1
 
     def _set_agent_line(index: int, display_content: str, temp_executing: str) -> None:
         transcript[index] = (
-            f"\n{_time_str()} [bold green]RagOps Agent>[/bold green] {display_content}{temp_executing}"  # noqa
+            f"\n{_time_str()} [bold green]RAGOps Agent>[/bold green] {display_content}{temp_executing}"  # noqa
         )
 
     # Formatting helpers for tool execution messages
@@ -396,11 +413,11 @@ async def _astart_repl(
 
     # Render welcome message as markdown
     welcome_msg = (
-        "Hello! I'm **Donkit - RagOps Agent**, your assistant for building RAG pipelines. "
+        "Hello! I'm **Donkit - RAGOps Agent**, your assistant for building RAG pipelines. "
         "How can I help you today?"
     )
     rendered_welcome = _render_markdown_to_rich(welcome_msg)
-    transcript.append(f"{_time_str()} [bold green]RagOps Agent>[/bold green] {rendered_welcome}")
+    transcript.append(f"{_time_str()} [bold green]RAGOps Agent>[/bold green] {rendered_welcome}")
     watcher = None
     if show_checklist:
         watcher = ChecklistWatcherWithRenderer(
@@ -434,8 +451,8 @@ async def _astart_repl(
                 "  [bold]:help[/bold] - Show this help message",
                 "  [bold]:q[/bold] or [bold]:quit[/bold] - Exit the agent",
                 "  [bold]:clear[/bold] - Clear the conversation transcript",
-                "  [bold]:agent [cyan]<llm_provider>/<model>[/cyan][/bold] - "
-                "Change agent LLM provider and model",
+                "  [bold]:provider[/bold] - Select LLM provider",
+                "  [bold]:model[/bold] - Select LLM model",
             ]
             continue
 
@@ -443,36 +460,501 @@ async def _astart_repl(
             transcript = []
             continue
 
-        if user_input.startswith(":agent "):
+        if user_input == ":provider":
+            # Select provider interactively
             _render_current_screen(show_input_space=False)
-            parts = user_input[len(":agent ") :].strip().split("/", 1)
-            if len(parts) != 2:
-                transcript.append("[bold red]Error:[/bold red] Invalid agent command format.")
+            from .model_selector import PROVIDERS
+            from .credential_checker import check_provider_credentials
+            from .interactive_input import interactive_select
+
+            # Build list of providers with status indicators
+            choices = []
+            provider_map = {}
+            current_provider_name = provider or settings.llm_provider or None
+
+            for idx, (prov_key, prov_info) in enumerate(PROVIDERS.items()):
+                has_creds = check_provider_credentials(prov_key)
+                choice_text = ""
+                if has_creds:
+                    choice_text += "[bold green]✓[/bold green] "
+                else:
+                    choice_text += "[bold yellow]⚠[/bold yellow] "
+                choice_text += prov_info["display"]
+                if has_creds:
+                    choice_text += " [bold green][Ready][/bold green]"
+                else:
+                    choice_text += " [yellow][Setup Required][/yellow]"
+                if prov_key == current_provider_name:
+                    choice_text += " [bold cyan]← Current[/bold cyan]"
+
+                choices.append(choice_text)
+                provider_map[idx] = prov_key
+
+            title = "Select LLM Provider"
+            selected_choice = interactive_select(choices, title=title)
+
+            if selected_choice is None:
+                _render_current_screen(show_input_space=True)
                 continue
-            new_provider, new_model = parts
-            if new_provider not in PROVIDER_PATHS:
-                transcript.append(
-                    f"[bold red]Error:[/bold red] Unknown provider '{new_provider}'. "
-                    f"Available providers: {', '.join(PROVIDER_PATHS.keys())}."
+
+            selected_idx = choices.index(selected_choice)
+            new_provider = provider_map[selected_idx]
+
+            # Check if credentials are configured
+            has_creds = check_provider_credentials(new_provider)
+            if not has_creds:
+                # Ask user to configure credentials
+                _render_current_screen(show_input_space=False)
+                from .interactive_input import interactive_confirm
+                from rich.prompt import Prompt
+                from rich.console import Console as RichConsole
+                
+                setup_console = RichConsole()
+                setup_console.print(
+                    f"\n[bold yellow]⚠ Provider not configured[/bold yellow]\n"
+                    f"Credentials are required for [cyan]{PROVIDERS[new_provider]['display']}[/cyan]\n"
                 )
-                continue
+                
+                configure_now = interactive_confirm(
+                    "Configure credentials now?", default=True
+                )
+                
+                if not configure_now:
+                    transcript.append(
+                        "[bold yellow]Provider selection cancelled. Credentials required.[/bold yellow]"
+                    )
+                    _render_current_screen(show_input_space=True)
+                    continue
+                
+                # Configure credentials interactively
+                config = {}
+                try:
+                    if new_provider == "openai":
+                        setup_console.print("[dim]Get your API key at: https://platform.openai.com/api-keys[/dim]\n")
+                        api_key = Prompt.ask("Enter OpenAI API key", password=True)
+                        if not api_key:
+                            transcript.append("[bold red]Error:[/bold red] API key is required")
+                            _render_current_screen(show_input_space=True)
+                            continue
+                        config["RAGOPS_OPENAI_API_KEY"] = api_key
+                        
+                    elif new_provider == "azure_openai":
+                        setup_console.print("[dim]You need credentials from Azure OpenAI service.[/dim]\n")
+                        api_key = Prompt.ask("Enter Azure OpenAI API key", password=True)
+                        endpoint = Prompt.ask("Enter Azure OpenAI endpoint", default="")
+                        deployment = Prompt.ask("Enter deployment name", default="")
+                        if not api_key or not endpoint or not deployment:
+                            transcript.append("[bold red]Error:[/bold red] All fields are required")
+                            _render_current_screen(show_input_space=True)
+                            continue
+                        config["RAGOPS_AZURE_OPENAI_API_KEY"] = api_key
+                        config["RAGOPS_AZURE_OPENAI_ENDPOINT"] = endpoint
+                        config["RAGOPS_AZURE_OPENAI_DEPLOYMENT"] = deployment
+                        config["RAGOPS_AZURE_OPENAI_API_VERSION"] = "2024-02-15-preview"
+                        
+                    elif new_provider == "anthropic":
+                        setup_console.print("[dim]Get your API key at: https://console.anthropic.com/[/dim]\n")
+                        api_key = Prompt.ask("Enter Anthropic API key", password=True)
+                        if not api_key:
+                            transcript.append("[bold red]Error:[/bold red] API key is required")
+                            _render_current_screen(show_input_space=True)
+                            continue
+                        config["RAGOPS_ANTHROPIC_API_KEY"] = api_key
+                        
+                    elif new_provider == "vertex":
+                        setup_console.print("[dim]You need a service account key file from Google Cloud.[/dim]\n")
+                        path = Prompt.ask("Enter path to service account JSON file")
+                        path = os.path.expanduser(path)
+                        if not Path(path).exists():
+                            transcript.append(f"[bold red]Error:[/bold red] File not found: {path}")
+                            _render_current_screen(show_input_space=True)
+                            continue
+                        config["RAGOPS_VERTEX_CREDENTIALS"] = path
+                        
+                    elif new_provider == "ollama":
+                        base_url = Prompt.ask("Ollama base URL", default="http://localhost:11434/api/v1")
+                        config["RAGOPS_OPENAI_API_KEY"] = "ollama"
+                        config["RAGOPS_OPENAI_BASE_URL"] = base_url
+                        
+                    elif new_provider == "openrouter":
+                        setup_console.print("[dim]Get your API key at: https://openrouter.ai/keys[/dim]\n")
+                        api_key = Prompt.ask("Enter OpenRouter API key", password=True)
+                        if not api_key:
+                            transcript.append("[bold red]Error:[/bold red] API key is required")
+                            _render_current_screen(show_input_space=True)
+                            continue
+                        config["RAGOPS_OPENAI_API_KEY"] = api_key
+                        config["RAGOPS_OPENAI_BASE_URL"] = "https://openrouter.ai/api/v1"
+                    
+                    # Save to .env file
+                    from dotenv import dotenv_values
+                    
+                    env_path = Path.cwd() / ".env"
+                    existing_config = {}
+                    if env_path.exists():
+                        try:
+                            existing_config = dict(dotenv_values(env_path))
+                        except Exception:
+                            pass
+                    
+                    # Merge configs
+                    merged_config = {**existing_config, **config}
+                    merged_config["RAGOPS_LLM_PROVIDER"] = new_provider
+                    
+                    # Write to .env
+                    lines = []
+                    if not env_path.exists():
+                        lines.extend([
+                            "# RAGOps Agent CE Configuration",
+                            "",
+                        ])
+                    
+                    # Add provider setting
+                    lines.append(f"RAGOPS_LLM_PROVIDER={new_provider}")
+                    lines.append("")
+                    
+                    # Add provider-specific settings
+                    lines.append(f"# {new_provider.upper()} settings")
+                    for key, value in config.items():
+                        lines.append(f"{key}={value}")
+                    lines.append("")
+                    
+                    # Add any existing settings not overwritten
+                    for key, value in existing_config.items():
+                        if key not in merged_config or key == "RAGOPS_LLM_PROVIDER":
+                            continue
+                        if key not in config:
+                            lines.append(f"{key}={value}")
+                    
+                    env_path.write_text("\n".join(lines))
+                    transcript.append(
+                        f"[bold green]✓ Credentials configured and saved to .env[/bold green]"
+                    )
+                    
+                except Exception as e:
+                    transcript.append(
+                        f"[bold red]Error:[/bold red] Failed to configure credentials: {str(e)}"
+                    )
+                    _render_current_screen(show_input_space=True)
+                    continue
+                
+                # Reload settings after saving
+                settings = load_settings()
+
+            # Update provider
             os.environ["RAGOPS_LLM_PROVIDER"] = new_provider
             settings = settings.model_copy(update={"llm_provider": new_provider})
-            prov = get_provider(settings)
-            agent_settings.llm_provider = prov
-            agent_settings.model = new_model
-            model = new_model
-            agent = LLMAgent(
-                prov,
-                tools=tools,
-                mcp_clients=mcp_clients,
-            )
-            await agent._ainit_mcp_tools()
-            transcript.append(
-                "[bold cyan]Agent updated:[/bold cyan] "
-                f"Provider set to [yellow]{new_provider}[/yellow], "
-                f"Model set to [yellow]{new_model}[/yellow]."
-            )
+            try:
+                prov = get_provider(settings, llm_provider=new_provider)
+                agent_settings.llm_provider = prov
+                provider = new_provider
+                # Reset model when provider changes (model might not be compatible)
+                model = None
+                agent_settings.model = None
+                agent = LLMAgent(
+                    prov,
+                    tools=tools,
+                    mcp_clients=mcp_clients,
+                )
+                await agent._ainit_mcp_tools()
+                transcript.append(
+                    "[bold cyan]Provider updated:[/bold cyan] "
+                    f"[yellow]{PROVIDERS[new_provider]['display']}[/yellow]"
+                )
+                
+                # Automatically prompt for model selection after provider change
+                _render_current_screen(show_input_space=False)
+                from .interactive_input import interactive_select
+                
+                # Try to get chat models from provider dynamically
+                models = []
+                try:
+                    if prov and hasattr(prov, 'list_chat_models'):
+                        models = prov.list_chat_models()
+                    elif prov and hasattr(prov, 'list_models'):
+                        models = prov.list_models()
+                except Exception as e:
+                    logger.warning(f"Failed to get models from provider: {e}")
+                
+                # Fallback to common models if provider doesn't support listing or failed
+                if not models:
+                    common_models = {
+                        "openai": [
+                            "gpt-4o",
+                            "gpt-4o-mini",
+                            "gpt-4-turbo",
+                            "gpt-4",
+                            "gpt-3.5-turbo",
+                            "o1-preview",
+                            "o1-mini",
+                        ],
+                        "azure_openai": [
+                            "gpt-4o",
+                            "gpt-4o-mini",
+                            "gpt-4-turbo",
+                            "gpt-4",
+                            "gpt-3.5-turbo",
+                        ],
+                        "vertex": [
+                            "gemini-2.5-flash",
+                            "gemini-2.0-flash-exp",
+                            "gemini-1.5-pro",
+                            "gemini-1.5-flash",
+                            "gemini-pro",
+                        ],
+                        "ollama": [
+                            "llama3.1",
+                            "llama3",
+                            "mistral",
+                            "mixtral",
+                            "phi3",
+                            "codellama",
+                        ],
+                        "openrouter": [
+                            "openai/gpt-4o",
+                            "openai/gpt-4-turbo",
+                            "anthropic/claude-3.5-sonnet",
+                            "google/gemini-pro-1.5",
+                            "meta-llama/llama-3.1-70b-instruct",
+                        ],
+                        "anthropic": [
+                            "claude-3-5-sonnet-20241022",
+                            "claude-3-opus-20240229",
+                            "claude-3-sonnet-20240229",
+                            "claude-3-haiku-20240307",
+                        ],
+                    }
+                    models = common_models.get(new_provider, [])
+                
+                if models:
+                    # Build choices list
+                    choices = []
+                    for model_name in models:
+                        choice = model_name
+                        if model_name == (agent_settings.model or model):
+                            choice += " [bold cyan]← Current[/bold cyan]"
+                        choices.append(choice)
+                    
+                    # Add "Skip" option
+                    choices.append("Skip (use default)")
+                    
+                    title = f"Select Model for {PROVIDERS[new_provider]['display']}"
+                    selected_choice = interactive_select(choices, title=title)
+                    
+                    if selected_choice and selected_choice != "Skip (use default)":
+                        # Extract model name (remove "← Current" if present)
+                        new_model = selected_choice.split(" [")[0].strip()
+                        
+                        # Validate model by trying to use it
+                        try:
+                            # Test if model is actually available by making a test request
+                            test_messages = [Message(role="user", content="test")]
+                            try:
+                                # Try to generate with the model (with minimal tokens)
+                                test_response = prov.generate(
+                                    test_messages,
+                                    model=new_model,
+                                    max_tokens=1,
+                                )
+                                # If successful, model is available
+                                agent_settings.model = new_model
+                                model = new_model
+                                transcript.append(
+                                    "[bold cyan]Model selected:[/bold cyan] "
+                                    f"[yellow]{new_model}[/yellow]"
+                                )
+                                save_model_selection(new_provider, new_model)
+                            except Exception as model_error:
+                                # Model is not available
+                                error_msg = str(model_error)
+                                # Extract more user-friendly error message
+                                if "model" in error_msg.lower() and ("not found" in error_msg.lower() or "does not exist" in error_msg.lower() or "not available" in error_msg.lower()):
+                                    friendly_msg = f"Model '{new_model}' is not available or not accessible with your API key."
+                                else:
+                                    friendly_msg = f"Model '{new_model}' is not available: {error_msg}"
+                                transcript.append(
+                                    f"[bold red]Error:[/bold red] {friendly_msg}\n"
+                                    "[yellow]Please select a different model.[/yellow]"
+                                )
+                                # Don't save the invalid model
+                        except Exception as e:
+                            # If validation itself fails, still try to set the model
+                            # but warn the user
+                            logger.warning(f"Model validation failed: {e}")
+                            agent_settings.model = new_model
+                            model = new_model
+                            transcript.append(
+                                "[bold cyan]Model selected:[/bold cyan] "
+                                f"[yellow]{new_model}[/yellow]\n"
+                                "[dim yellow]Note: Could not validate model availability[/dim yellow]"
+                            )
+                            save_model_selection(new_provider, new_model)
+                    elif selected_choice == "Skip (use default)":
+                        transcript.append(
+                            "[dim]Using default model for this provider[/dim]"
+                        )
+                    # If None (cancelled), just continue without setting model
+                else:
+                    transcript.append(
+                        "[bold yellow]No models available for selection. "
+                        "Please specify model name in .env file or use CLI flag.[/bold yellow]"
+                    )
+                
+            except Exception as e:
+                transcript.append(
+                    f"[bold red]Error:[/bold red] Failed to initialize provider: {str(e)}"
+                )
+            _render_current_screen(show_input_space=True)
+            continue
+
+        if user_input == ":model":
+            # Select model interactively
+            _render_current_screen(show_input_space=False)
+            from .interactive_input import interactive_select
+
+            current_provider_name = provider or settings.llm_provider or "openai"
+            current_model_name = agent_settings.model or model
+
+            # Try to get chat models from provider dynamically (for agent use)
+            models = []
+            try:
+                if prov and hasattr(prov, 'list_chat_models'):
+                    models = prov.list_chat_models()
+                elif prov and hasattr(prov, 'list_models'):
+                    # Fallback to all models if list_chat_models not available
+                    models = prov.list_models()
+            except Exception as e:
+                logger.warning(f"Failed to get models from provider: {e}")
+
+            # Fallback to common models if provider doesn't support listing or failed
+            if not models:
+                common_models = {
+                    "openai": [
+                        "gpt-4o",
+                        "gpt-4o-mini",
+                        "gpt-4-turbo",
+                        "gpt-4",
+                        "gpt-3.5-turbo",
+                        "o1-preview",
+                        "o1-mini",
+                    ],
+                    "azure_openai": [
+                        "gpt-4o",
+                        "gpt-4o-mini",
+                        "gpt-4-turbo",
+                        "gpt-4",
+                        "gpt-3.5-turbo",
+                    ],
+                    "vertex": [
+                        "gemini-2.5-flash",
+                        "gemini-2.0-flash-exp",
+                        "gemini-1.5-pro",
+                        "gemini-1.5-flash",
+                        "gemini-pro",
+                        "gemini-pro-vision",
+                    ],
+                    "ollama": [
+                        "llama3.1",
+                        "llama3",
+                        "mistral",
+                        "mixtral",
+                        "phi3",
+                        "codellama",
+                    ],
+                    "openrouter": [
+                        "openai/gpt-4o",
+                        "openai/gpt-4-turbo",
+                        "anthropic/claude-3.5-sonnet",
+                        "google/gemini-pro-1.5",
+                        "meta-llama/llama-3.1-70b-instruct",
+                    ],
+                    "anthropic": [
+                        "claude-3-5-sonnet-20241022",
+                        "claude-3-opus-20240229",
+                        "claude-3-sonnet-20240229",
+                        "claude-3-haiku-20240307",
+                    ],
+                }
+                models = common_models.get(current_provider_name, [])
+
+            if not models:
+                # If no predefined models, ask user to input
+                transcript.append(
+                    "[bold yellow]No predefined models for this provider.[/bold yellow]\n"
+                    f"Current model: [cyan]{current_model_name or 'not set'}[/cyan]\n"
+                    "Please specify model name in .env file or use CLI flag."
+                )
+                _render_current_screen(show_input_space=True)
+                continue
+
+            # Build choices list
+            choices = []
+            for model_name in models:
+                choice = model_name
+                if model_name == current_model_name:
+                    choice += " [bold cyan]← Current[/bold cyan]"
+                choices.append(choice)
+
+            # Add "Custom" option
+            choices.append("Custom (enter manually)")
+
+            title = f"Select Model for {current_provider_name}"
+            selected_choice = interactive_select(choices, title=title)
+
+            if selected_choice is None:
+                _render_current_screen(show_input_space=True)
+                continue
+
+            if selected_choice == "Custom (enter manually)":
+                transcript.append(
+                    "[bold yellow]Please specify model name in .env file or use CLI flag.[/bold yellow]"
+                )
+                _render_current_screen(show_input_space=True)
+                continue
+
+            # Extract model name (remove "← Current" if present)
+            new_model = selected_choice.split(" [")[0].strip()
+
+            # Validate model by trying to use it
+            try:
+                # Test if model is actually available
+                test_messages = [Message(role="user", content="test")]
+                try:
+                    test_response = prov.generate(
+                        test_messages,
+                        model=new_model,
+                        max_tokens=1,
+                    )
+                    # If successful, model is available
+                    agent_settings.model = new_model
+                    model = new_model
+                    transcript.append(
+                        "[bold cyan]Model updated:[/bold cyan] " f"[yellow]{new_model}[/yellow]"
+                    )
+                    save_model_selection(current_provider_name, new_model)
+                except Exception as model_error:
+                    # Model is not available
+                    error_msg = str(model_error)
+                    if "model" in error_msg.lower() and ("not found" in error_msg.lower() or "does not exist" in error_msg.lower() or "not available" in error_msg.lower()):
+                        friendly_msg = f"Model '{new_model}' is not available or not accessible with your API key."
+                    else:
+                        friendly_msg = f"Model '{new_model}' is not available: {error_msg}"
+                    transcript.append(
+                        f"[bold red]Error:[/bold red] {friendly_msg}\n"
+                        "[yellow]Please select a different model using :model command.[/yellow]"
+                    )
+                    # Don't save the invalid model
+            except Exception as e:
+                # If validation itself fails, still try to set the model but warn
+                logger.warning(f"Model validation failed: {e}")
+                agent_settings.model = new_model
+                model = new_model
+                transcript.append(
+                    "[bold cyan]Model updated:[/bold cyan] "
+                    f"[yellow]{new_model}[/yellow]\n"
+                    "[dim yellow]Note: Could not validate model availability[/dim yellow]"
+                )
+                save_model_selection(current_provider_name, new_model)
             _render_current_screen(show_input_space=True)
             continue
 
@@ -521,10 +1003,30 @@ async def _astart_repl(
                     transcript[response_index] = (
                         f"{_time_str()} [yellow]⚠ Generation interrupted by user[/yellow]"
                     )
+                except Exception as e:
+                    # Show error to user
+                    error_msg = f"{_time_str()} [bold red]Error:[/bold red] {str(e)}"
+                    if response_index is not None:
+                        transcript[response_index] = error_msg
+                    else:
+                        transcript.append(error_msg)
+                    logger.error(f"Error during streaming: {e}", exc_info=True)
+                    _render_current_screen(show_input_space=False)
 
                 # Add to history if we got a response
                 if reply and not interrupted:
                     history.append(Message(role="assistant", content=reply))
+                elif not interrupted and not reply:
+                    # No reply but no interruption - likely an error was swallowed
+                    error_msg = (
+                        f"{_time_str()} [bold red]Error:[/bold red] "
+                        "No response from agent. Check logs for details."
+                    )
+                    if response_index is not None:
+                        transcript[response_index] = error_msg
+                    else:
+                        transcript.append(error_msg)
+                    _render_current_screen(show_input_space=False)
             else:
                 # Fall back to non-streaming mode
                 # Add placeholder
@@ -532,15 +1034,28 @@ async def _astart_repl(
 
                 try:
                     reply = await agent.arespond(history, model=model)
-                    history.append(Message(role="assistant", content=reply))
-
-                    # Replace placeholder with actual response
-                    rendered_reply = _render_markdown_to_rich(reply)
-                    _set_agent_line(response_index, rendered_reply, "")
+                    if reply:
+                        history.append(Message(role="assistant", content=reply))
+                        # Replace placeholder with actual response
+                        rendered_reply = _render_markdown_to_rich(reply)
+                        _set_agent_line(response_index, rendered_reply, "")
+                    else:
+                        # No reply - likely an error
+                        transcript[response_index] = (
+                            f"{_time_str()} [bold red]Error:[/bold red] "
+                            "No response from agent. Check logs for details."
+                        )
                 except KeyboardInterrupt:
                     console.print("\n[yellow]⚠ Generation interrupted by user[/yellow]")
                     transcript[response_index] = (
                         f"{_time_str()} [yellow]Generation interrupted[/yellow]"
                     )
+                except Exception as e:
+                    error_msg = f"{_time_str()} [bold red]Error:[/bold red] {str(e)}"
+                    transcript[response_index] = error_msg
+                    logger.error(f"Error during agent response: {e}", exc_info=True)
+                _render_current_screen(show_input_space=False)
         except Exception as e:
             transcript.append(f"{_time_str()} [bold red]Error:[/bold red] {str(e)}")
+            logger.error(f"Error in main loop: {e}", exc_info=True)
+            _render_current_screen(show_input_space=False)

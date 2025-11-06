@@ -65,3 +65,26 @@ class AnthropicProvider(LLMProvider):
         text_parts = [b.get("text", "") for b in content_blocks if b.get("type") == "text"]
         content = "\n".join([t for t in text_parts if t])
         return LLMResponse(content=content, raw=data)
+
+    def list_models(self) -> list[str]:
+        """Get list of available models from Anthropic.
+        
+        Note: Anthropic API doesn't provide a models list endpoint,
+        so we return common models.
+        """
+        return [
+            "claude-3-5-sonnet-20241022",
+            "claude-3-opus-20240229",
+            "claude-3-sonnet-20240229",
+            "claude-3-haiku-20240307",
+        ]
+
+    def list_chat_models(self) -> list[str]:
+        """Get list of chat models (all Anthropic models are chat models with tool calling)."""
+        # All Anthropic Claude models support tool calling
+        return self.list_models()
+
+    def list_embedding_models(self) -> list[str]:
+        """Get list of embedding models."""
+        # Anthropic doesn't provide embedding models
+        return []

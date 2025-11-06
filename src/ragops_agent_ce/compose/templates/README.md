@@ -1,101 +1,101 @@
-# Docker Compose Services для RagOps
+# Docker Compose Services for RAGOps
 
-Эта директория содержит docker-compose файлы для быстрого развёртывания сервисов RagOps.
+This directory contains docker-compose files for quick deployment of RAGOps services.
 
-## 📦 Доступные сервисы
+## 📦 Available Services
 
 ### 1. Qdrant (qdrant.yml)
-Векторная база данных для хранения embeddings.
+Vector database for storing embeddings.
 
-**Порты:**
+**Ports:**
 - `6333` - HTTP API
 - `6334` - gRPC API
 
 **Dashboard:** http://localhost:6333/dashboard
 
 ### 2. RAG Service (rag-service.yml)
-Основной RAG сервис для выполнения запросов к векторной базе.
+Main RAG service for querying the vector database.
 
-**Порты:**
+**Ports:**
 - `8000` - HTTP API
 
 **API Docs:** http://localhost:8000/api/docs
 
 ### 3. Full Stack (full-stack.yml)
-Все сервисы вместе (Qdrant + RAG Service).
+All services together (Qdrant + RAG Service).
 
-## 🚀 Быстрый старт
+## 🚀 Quick Start
 
-### Шаг 1: Настройка credentials
+### Step 1: Configure Credentials
 
-Скопируйте `.env.example` в `.env` и заполните нужные credentials:
+Copy `.env.example` to `.env` and fill in the required credentials:
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-Минимально нужно настроить один LLM провайдер (OpenAI, Azure OpenAI, или Vertex AI).
+At minimum, you need to configure one LLM provider (OpenAI, Azure OpenAI, or Vertex AI).
 
-### Шаг 2: Запуск сервисов
+### Step 2: Start Services
 
-#### Вариант A: Только Qdrant
+#### Option A: Qdrant Only
 ```bash
 docker-compose -f qdrant.yml up -d
 ```
 
-#### Вариант B: Полный стек
+#### Option B: Full Stack
 ```bash
 docker-compose -f full-stack.yml up -d
 ```
 
-#### Вариант C: Конкретный сервис
+#### Option C: Specific Service
 ```bash
 # RAG Service
 docker-compose -f rag-service.yml up -d
 ```
 
-### Шаг 3: Проверка статуса
+### Step 3: Check Status
 
 ```bash
 docker-compose -f full-stack.yml ps
 ```
 
-### Шаг 4: Просмотр логов
+### Step 4: View Logs
 
 ```bash
-# Все сервисы
+# All services
 docker-compose -f full-stack.yml logs -f
 
-# Конкретный сервис
+# Specific service
 docker-compose -f full-stack.yml logs -f qdrant
 docker-compose -f full-stack.yml logs -f rag-service
 ```
 
-## 🛠️ Управление сервисами
+## 🛠️ Service Management
 
-### Остановка
+### Stop Services
 ```bash
 docker-compose -f full-stack.yml down
 ```
 
-### Остановка с удалением volumes
+### Stop with Volume Removal
 ```bash
 docker-compose -f full-stack.yml down -v
 ```
 
-### Перезапуск
+### Restart
 ```bash
 docker-compose -f full-stack.yml restart
 ```
 
-### Обновление образов
+### Update Images
 ```bash
 docker-compose -f full-stack.yml pull
 docker-compose -f full-stack.yml up -d
 ```
 
-## 🔧 Настройка через .env
+## 🔧 Configuration via .env
 
 ### OpenAI
 ```env
@@ -115,9 +115,9 @@ GOOGLE_APPLICATION_CREDENTIALS=./vertex_service_account.json
 RAGOPS_VERTEX_CREDENTIALS=./vertex_service_account.json
 ```
 
-**Важно:** Положите JSON файл с credentials в эту же директорию.
+**Important:** Place the JSON credentials file in this directory.
 
-## 📊 Проверка работоспособности
+## 📊 Health Checks
 
 ### Qdrant
 ```bash
@@ -132,33 +132,33 @@ curl http://localhost:8000/health
 ## 🐛 Troubleshooting
 
 ### "Port already in use"
-Если порт уже занят, измените маппинг в compose файле:
+If the port is already in use, change the mapping in the compose file:
 ```yaml
 ports:
-  - "6334:6333"  # внешний:внутренний
+  - "6334:6333"  # external:internal
 ```
 
 ### "Cannot connect to Docker daemon"
-Убедитесь что Docker запущен:
+Make sure Docker is running:
 ```bash
 docker info
 ```
 
-### "Permission denied" для Vertex AI credentials
+### "Permission denied" for Vertex AI credentials
 ```bash
 chmod 600 vertex_service_account.json
 ```
 
-### Qdrant не стартует
-Проверьте что папка для volume доступна:
+### Qdrant won't start
+Check that the volume folder is accessible:
 ```bash
 docker volume ls
 docker volume inspect qdrant_data
 ```
 
-## 📝 Примеры использования
+## 📝 Usage Examples
 
-### Создание коллекции в Qdrant
+### Create Collection in Qdrant
 ```bash
 curl -X PUT http://localhost:6333/collections/my_collection \
   -H 'Content-Type: application/json' \
@@ -170,7 +170,7 @@ curl -X PUT http://localhost:6333/collections/my_collection \
   }'
 ```
 
-### Запрос к RAG Service
+### Query RAG Service
 ```bash
 curl -X POST http://localhost:8000/api/query \
   -H 'Content-Type: application/json' \
@@ -179,15 +179,15 @@ curl -X POST http://localhost:8000/api/query \
   }'
 ```
 
-## 🔗 Полезные ссылки
+## 🔗 Useful Links
 
 - [Qdrant Documentation](https://qdrant.tech/documentation/)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
-- [RagOps Agent CE GitHub](https://github.com/donkit-ai/ragops-agent-ce)
+- [RAGOps Agent CE GitHub](https://github.com/donkit-ai/ragops-agent-ce)
 
-## 💡 Советы
+## 💡 Tips
 
-1. **Development:** Используйте отдельные compose файлы для каждого сервиса
-2. **Production:** Используйте `full-stack.yml` или настройте kubernetes
-3. **Monitoring:** Добавьте `--name` для контейнеров для легкой идентификации
-4. **Backups:** Регулярно делайте бэкап `qdrant_data` volume
+1. **Development:** Use separate compose files for each service
+2. **Production:** Use `full-stack.yml` or configure Kubernetes
+3. **Monitoring:** Add `--name` to containers for easy identification
+4. **Backups:** Regularly backup the `qdrant_data` volume
