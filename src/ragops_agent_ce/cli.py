@@ -1,5 +1,21 @@
 from __future__ import annotations
 
+import warnings
+
+# Suppress warnings from transitive dependencies we don't control
+#
+# See __main__.py for detailed explanation of why these warnings are suppressed.
+# These are issues in dependencies (pypdf, matplotlib) that don't affect our functionality.
+warnings.filterwarnings("ignore", message=".*Unable to import Axes3D.*", module="matplotlib")
+warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib.projections")
+warnings.filterwarnings("ignore", message=".*ARC4 has been moved.*")
+try:
+    from cryptography.utils import CryptographyDeprecationWarning
+
+    warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
+except ImportError:
+    pass
+
 import asyncio
 import json
 import os
@@ -100,7 +116,7 @@ def main(
         help="Render checklist panel at start and after each step",
     ),
 ) -> None:
-    """RagOps Agent CE - LLM-powered CLI agent for building RAG pipelines."""
+    """RAGOps Agent CE - LLM-powered CLI agent for building RAG pipelines."""
     # Setup logging according to .env / settings
     try:
         setup_logging(load_settings())
@@ -281,12 +297,12 @@ async def _astart_repl(
         transcript.append(f"\n\n{_time_str()} [bold blue]you>[/bold blue] {escape(text)}")
 
     def _start_agent_placeholder() -> int:
-        transcript.append(f"\n{_time_str()} [bold green]RagOps Agent>[/bold green] ")
+        transcript.append(f"\n{_time_str()} [bold green]RAGOps Agent>[/bold green] ")
         return len(transcript) - 1
 
     def _set_agent_line(index: int, display_content: str, temp_executing: str) -> None:
         transcript[index] = (
-            f"\n{_time_str()} [bold green]RagOps Agent>[/bold green] {display_content}{temp_executing}"  # noqa
+            f"\n{_time_str()} [bold green]RAGOps Agent>[/bold green] {display_content}{temp_executing}"  # noqa
         )
 
     # Formatting helpers for tool execution messages
@@ -397,11 +413,11 @@ async def _astart_repl(
 
     # Render welcome message as markdown
     welcome_msg = (
-        "Hello! I'm **Donkit - RagOps Agent**, your assistant for building RAG pipelines. "
+        "Hello! I'm **Donkit - RAGOps Agent**, your assistant for building RAG pipelines. "
         "How can I help you today?"
     )
     rendered_welcome = _render_markdown_to_rich(welcome_msg)
-    transcript.append(f"{_time_str()} [bold green]RagOps Agent>[/bold green] {rendered_welcome}")
+    transcript.append(f"{_time_str()} [bold green]RAGOps Agent>[/bold green] {rendered_welcome}")
     watcher = None
     if show_checklist:
         watcher = ChecklistWatcherWithRenderer(
@@ -589,7 +605,7 @@ async def _astart_repl(
                     lines = []
                     if not env_path.exists():
                         lines.extend([
-                            "# RagOps Agent CE Configuration",
+                            "# RAGOps Agent CE Configuration",
                             "",
                         ])
                     
@@ -728,13 +744,51 @@ async def _astart_repl(
                     if selected_choice and selected_choice != "Skip (use default)":
                         # Extract model name (remove "← Current" if present)
                         new_model = selected_choice.split(" [")[0].strip()
-                        agent_settings.model = new_model
-                        model = new_model
-                        transcript.append(
-                            "[bold cyan]Model selected:[/bold cyan] "
-                            f"[yellow]{new_model}[/yellow]"
-                        )
-                        save_model_selection(new_provider, new_model)
+                        
+                        # Validate model by trying to use it
+                        try:
+                            # Test if model is actually available by making a test request
+                            test_messages = [Message(role="user", content="test")]
+                            try:
+                                # Try to generate with the model (with minimal tokens)
+                                test_response = prov.generate(
+                                    test_messages,
+                                    model=new_model,
+                                    max_tokens=1,
+                                )
+                                # If successful, model is available
+                                agent_settings.model = new_model
+                                model = new_model
+                                transcript.append(
+                                    "[bold cyan]Model selected:[/bold cyan] "
+                                    f"[yellow]{new_model}[/yellow]"
+                                )
+                                save_model_selection(new_provider, new_model)
+                            except Exception as model_error:
+                                # Model is not available
+                                error_msg = str(model_error)
+                                # Extract more user-friendly error message
+                                if "model" in error_msg.lower() and ("not found" in error_msg.lower() or "does not exist" in error_msg.lower() or "not available" in error_msg.lower()):
+                                    friendly_msg = f"Model '{new_model}' is not available or not accessible with your API key."
+                                else:
+                                    friendly_msg = f"Model '{new_model}' is not available: {error_msg}"
+                                transcript.append(
+                                    f"[bold red]Error:[/bold red] {friendly_msg}\n"
+                                    "[yellow]Please select a different model.[/yellow]"
+                                )
+                                # Don't save the invalid model
+                        except Exception as e:
+                            # If validation itself fails, still try to set the model
+                            # but warn the user
+                            logger.warning(f"Model validation failed: {e}")
+                            agent_settings.model = new_model
+                            model = new_model
+                            transcript.append(
+                                "[bold cyan]Model selected:[/bold cyan] "
+                                f"[yellow]{new_model}[/yellow]\n"
+                                "[dim yellow]Note: Could not validate model availability[/dim yellow]"
+                            )
+                            save_model_selection(new_provider, new_model)
                     elif selected_choice == "Skip (use default)":
                         transcript.append(
                             "[dim]Using default model for this provider[/dim]"
@@ -861,12 +915,46 @@ async def _astart_repl(
             # Extract model name (remove "← Current" if present)
             new_model = selected_choice.split(" [")[0].strip()
 
-            # Update model
-            agent_settings.model = new_model
-            model = new_model
-            transcript.append(
-                "[bold cyan]Model updated:[/bold cyan] " f"[yellow]{new_model}[/yellow]"
-            )
+            # Validate model by trying to use it
+            try:
+                # Test if model is actually available
+                test_messages = [Message(role="user", content="test")]
+                try:
+                    test_response = prov.generate(
+                        test_messages,
+                        model=new_model,
+                        max_tokens=1,
+                    )
+                    # If successful, model is available
+                    agent_settings.model = new_model
+                    model = new_model
+                    transcript.append(
+                        "[bold cyan]Model updated:[/bold cyan] " f"[yellow]{new_model}[/yellow]"
+                    )
+                    save_model_selection(current_provider_name, new_model)
+                except Exception as model_error:
+                    # Model is not available
+                    error_msg = str(model_error)
+                    if "model" in error_msg.lower() and ("not found" in error_msg.lower() or "does not exist" in error_msg.lower() or "not available" in error_msg.lower()):
+                        friendly_msg = f"Model '{new_model}' is not available or not accessible with your API key."
+                    else:
+                        friendly_msg = f"Model '{new_model}' is not available: {error_msg}"
+                    transcript.append(
+                        f"[bold red]Error:[/bold red] {friendly_msg}\n"
+                        "[yellow]Please select a different model using :model command.[/yellow]"
+                    )
+                    # Don't save the invalid model
+            except Exception as e:
+                # If validation itself fails, still try to set the model but warn
+                logger.warning(f"Model validation failed: {e}")
+                agent_settings.model = new_model
+                model = new_model
+                transcript.append(
+                    "[bold cyan]Model updated:[/bold cyan] "
+                    f"[yellow]{new_model}[/yellow]\n"
+                    "[dim yellow]Note: Could not validate model availability[/dim yellow]"
+                )
+                save_model_selection(current_provider_name, new_model)
             _render_current_screen(show_input_space=True)
             continue
 

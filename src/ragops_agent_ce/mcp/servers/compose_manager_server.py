@@ -1,5 +1,5 @@
 """
-MCP Server for managing docker-compose services for RagOps.
+MCP Server for managing docker-compose services for RAGOps.
 
 Provides tools to:
 - List available services
@@ -205,7 +205,7 @@ def generate_env_file(
     """Generate .env file content from RagConfig."""
     lines = [
         "# =============================================================================",
-        "# RagOps Agent CE - Docker Compose Environment Variables",
+        "# RAGOps Agent CE - Docker Compose Environment Variables",
         "# =============================================================================",
         "# Generated automatically by ragops-compose-manager",
         "",

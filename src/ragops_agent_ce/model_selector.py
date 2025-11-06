@@ -1,5 +1,5 @@
 """
-Model selection module for RagOps Agent CE.
+Model selection module for RAGOps Agent CE.
 
 Provides model selection screen at startup with visual indicators
 for configured credentials and automatic resume of latest selection.
@@ -367,10 +367,60 @@ def select_model_at_startup(
             if selected_model_choice and selected_model_choice != "Skip (use default)":
                 # Extract model name (remove "← Last used" if present)
                 model = selected_model_choice.split(" [")[0].strip()
-                console.print(f"✓ Model selected: [green]{model}[/green]\n")
+                
+                # Validate model by trying to use it
+                try:
+                    from ragops_agent_ce.llm.types import Message
+                    
+                    # Test if model is actually available
+                    test_messages = [Message(role="user", content="test")]
+                    try:
+                        test_response = provider_instance.generate(
+                            test_messages,
+                            model=model,
+                            max_tokens=1,
+                        )
+                        # If successful, model is available
+                        console.print(f"✓ Model selected: [green]{model}[/green]\n")
+                    except Exception as model_error:
+                        # Model is not available
+                        error_msg = str(model_error)
+                        if "model" in error_msg.lower() and ("not found" in error_msg.lower() or "does not exist" in error_msg.lower() or "not available" in error_msg.lower()):
+                            friendly_msg = f"Model '{model}' is not available or not accessible with your API key."
+                        else:
+                            friendly_msg = f"Model '{model}' is not available: {error_msg}"
+                        console.print(f"[bold red]Error:[/bold red] {friendly_msg}")
+                        console.print("[yellow]Please select a different model.[/yellow]\n")
+                        # Ask user to select again
+                        retry_model = interactive_select(choices, title=title, default_index=default_index)
+                        if retry_model and retry_model != "Skip (use default)":
+                            model = retry_model.split(" [")[0].strip()
+                            # Try validation again (but don't loop forever)
+                            try:
+                                test_response = provider_instance.generate(
+                                    [Message(role="user", content="test")],
+                                    model=model,
+                                    max_tokens=1,
+                                )
+                                console.print(f"✓ Model selected: [green]{model}[/green]\n")
+                            except Exception:
+                                # If still fails, set it anyway but warn
+                                console.print(f"[yellow]Warning:[/yellow] Model '{model}' validation failed, but it will be set anyway.\n")
+                                model = None  # Set to None to use default
+                        else:
+                            model = None  # User skipped or cancelled
+                except Exception as e:
+                    # If validation itself fails, still set the model but warn
+                    console.print(f"[yellow]Warning:[/yellow] Could not validate model '{model}': {e}")
+                    console.print(f"[dim]Model '{model}' will be set, but may not be available.[/dim]\n")
+                    model = None  # Set to None to be safe
+                    
             elif selected_model_choice == "Skip (use default)":
                 console.print("[dim]Using default model for this provider[/dim]\n")
-            # If None (cancelled), use None model
+                model = None
+            else:
+                # Cancelled - use None model
+                model = None
         else:
             console.print(
                 "[yellow]No models available for selection. "

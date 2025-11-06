@@ -1,5 +1,5 @@
 """
-Shared configuration schemas for RagOps MCP servers.
+Shared configuration schemas for RAGOps MCP servers.
 
 This module contains common Pydantic models used across multiple servers
 to ensure consistency and avoid duplication.

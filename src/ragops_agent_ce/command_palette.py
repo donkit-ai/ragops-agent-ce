@@ -1,5 +1,5 @@
 """
-Command palette module for RagOps Agent CE.
+Command palette module for RAGOps Agent CE.
 
 Provides command palette functionality with autosuggest and filtering.
 Activated when user presses '/' in the input box.

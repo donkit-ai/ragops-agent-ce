@@ -1,5 +1,5 @@
 """
-Checklist management module for RagOps Agent CE.
+Checklist management module for RAGOps Agent CE.
 
 Handles checklist file operations, formatting, and watching functionality.
 Follows Single Responsibility Principle - manages only checklist-related operations.

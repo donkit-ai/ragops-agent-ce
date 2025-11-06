@@ -1,4 +1,4 @@
-# RagOps Agent CE (Community Edition)
+# RAGOps Agent CE (Community Edition)
 
 [![PyPI version](https://badge.fury.io/py/donkit-ragops-ce.svg)](https://badge.fury.io/py/donkit-ragops-ce)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
@@ -228,7 +228,7 @@ The agent follows a structured workflow:
 
 ## MCP Servers
 
-RagOps Agent CE includes built-in MCP servers:
+RAGOps Agent CE includes built-in MCP servers:
 
 ### `ragops-rag-planner`
 
@@ -395,7 +395,7 @@ services:
 
 ```
 ┌─────────────────┐
-│  RagOps Agent   │
+│  RAGOps Agent   │
 │     (CLI)       │
 └────────┬────────┘
          │

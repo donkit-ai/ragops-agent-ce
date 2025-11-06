@@ -14,7 +14,7 @@ from rich.text import Text
 from ragops_agent_ce.schemas.agent_schemas import AgentSettings
 
 """
-Display and rendering module for RagOps Agent CE.
+Display and rendering module for RAGOps Agent CE.
 
 Handles screen rendering, panel creation, and terminal display logic.
 Follows Single Responsibility Principle - manages only display-related operations.
@@ -258,7 +258,7 @@ class ScreenRenderer:
         clear_screen_aggressive()
 
         console.print()
-        console.print("[bold blue]🤖 RagOps Agent CE[/bold blue]")
+        console.print("[bold blue]🤖 RAGOps Agent CE[/bold blue]")
         console.print("[dim]Interactive AI Agent for RAG Operations[/dim]")
         console.print()
         console.print("[yellow]Commands:[/yellow]")
@@ -276,5 +276,5 @@ class ScreenRenderer:
         """Render the goodbye screen on exit."""
         console.print()
         console.print("[bold blue]👋 Goodbye![/bold blue]")
-        console.print("[dim]Thanks for using RagOps Agent CE[/dim]")
+        console.print("[dim]Thanks for using RAGOps Agent CE[/dim]")
         console.print()

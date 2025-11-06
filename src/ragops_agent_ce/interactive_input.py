@@ -1,5 +1,5 @@
 """
-Interactive input module for RagOps Agent CE.
+Interactive input module for RAGOps Agent CE.
 
 Provides interactive input box functionality with real-time typing inside Rich panels.
 Follows Single Responsibility Principle - handles only user input interactions.

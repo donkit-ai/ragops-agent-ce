@@ -8,8 +8,8 @@ from .config import Settings
 from .config import load_settings
 
 
-class RagOpsClient:
-    """Minimal HTTP client wrapper for RagOps APIs."""
+class RAGOpsClient:
+    """Minimal HTTP client wrapper for RAGOps APIs."""
 
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or load_settings()
@@ -30,7 +30,7 @@ class RagOpsClient:
     def close(self) -> None:
         self._client.close()
 
-    def __enter__(self) -> RagOpsClient:
+    def __enter__(self) -> RAGOpsClient:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:  # type: ignore[no-untyped-def]

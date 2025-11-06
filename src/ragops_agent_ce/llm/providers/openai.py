@@ -64,7 +64,12 @@ class OpenAIProvider(LLMProvider):
             ]
 
     def list_chat_models(self) -> list[str]:
-        """Get list of chat models with tool calling support."""
+        """Get list of chat models with tool calling support.
+        
+        Note: models.list() returns models available for your API key,
+        but final availability is validated when a model is selected.
+        Some models may be restricted by region, subscription plan, or early access.
+        """
         try:
             models = self._client.models.list()
             # Filter to chat completion models that support function calling
@@ -72,8 +77,11 @@ class OpenAIProvider(LLMProvider):
             model_names = []
             for model in models:
                 name = model.id
-                # Include GPT models and o1 models (exclude embedding models)
-                if (name.startswith("gpt-") or name.startswith("o1-")) and "embedding" not in name.lower():
+                # Exclude embedding models
+                if "embedding" in name.lower():
+                    continue
+                # Include GPT models and o1 models
+                if name.startswith("gpt-") or name.startswith("o1-"):
                     model_names.append(name)
             return sorted(model_names, reverse=True)
         except Exception:

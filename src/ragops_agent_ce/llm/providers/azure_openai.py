@@ -68,7 +68,11 @@ class AzureOpenAIProvider(LLMProvider):
             model_names = []
             for model in models:
                 name = model.id
-                if (name.startswith("gpt-") or name.startswith("o1-")) and "embedding" not in name.lower():
+                # Exclude embedding models
+                if "embedding" in name.lower():
+                    continue
+                # Include GPT models and o1 models
+                if name.startswith("gpt-") or name.startswith("o1-"):
                     model_names.append(name)
             return sorted(model_names, reverse=True)
         except Exception:
