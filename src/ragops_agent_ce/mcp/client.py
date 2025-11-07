@@ -113,7 +113,6 @@ class MCPClient:
             command=self.command,
             args=self.args,
             env=self._env,
-            keep_alive=True,
         )
         client = Client(transport)
         async with client:
@@ -166,9 +165,7 @@ class MCPClient:
         """Call a tool on the MCP server."""
         logger.debug(f"Calling tool {name} with arguments {arguments}")
         # Create StdioTransport with explicit command, args, and environment
-        transport = StdioTransport(
-            command=self.command, args=self.args, env=self._env, keep_alive=True
-        )
+        transport = StdioTransport(command=self.command, args=self.args, env=self._env)
         client = Client(transport, progress_handler=self.__progress_handler)
         async with client:
             # FastMCP wraps Pydantic models in {"args": <model>}, so wrap arguments

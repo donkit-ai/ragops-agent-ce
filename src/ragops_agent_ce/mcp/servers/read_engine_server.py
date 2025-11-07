@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import warnings
 
+from ragops_agent_ce.schemas.config_schemas import ReadingFormat
+
 # Suppress all warnings immediately, before any other imports
 warnings.filterwarnings("ignore")
 # Suppress warnings from importlib bootstrap (SWIG-related)
@@ -13,7 +15,6 @@ import os
 import re
 import unicodedata
 from pathlib import Path
-from typing import Literal
 
 from donkit.read_engine.read_engine import DonkitReader
 from fastmcp import Context
@@ -34,9 +35,9 @@ class ProcessDocumentsArgs(BaseModel):
     project_id: str = Field(
         description="Project ID to store processed documents in projects/<project_id>/processed/"
     )
-    output_type: Literal["json"] = Field(
-        default="json",  # TODO: add new types - .md, .txt
-        description="Output format for processed documents, always json",
+    reading_format: ReadingFormat = Field(
+        default=ReadingFormat.JSON,
+        description="Format in which documents will be read by LLM",
     )
     use_llm: bool = Field(
         default=True,
@@ -92,10 +93,16 @@ async def process_documents(args: ProcessDocumentsArgs, ctx: Context) -> str:
         except Exception as e:
             logger.debug(f"Failed to report progress: {e}")
 
-    reader = DonkitReader(use_llm=args.use_llm, progress_callback=progress_callback)
+    reader = DonkitReader(
+        output_format=args.reading_format.value,
+        use_llm=args.use_llm,
+        progress_callback=progress_callback,
+    )
     logger.debug(reader.readers)
     supported_extensions = set(reader.readers.keys())
-
+    supported_extensions.add(".pdf")
+    supported_extensions.add(".pptx")
+    supported_extensions.add(".docx")
     # Determine files to process based on source_path
     files_to_process: list[Path] = []
     source_path_str = args.source_path.strip()
@@ -207,7 +214,6 @@ async def process_documents(args: ProcessDocumentsArgs, ctx: Context) -> str:
             # Use async version for better performance
             output_path = await reader.aread_document(
                 str(file_path),
-                output_type=args.output_type,  # type: ignore
                 output_dir=str(project_output_dir),
             )
             logger.debug(f"DonkitReader saved to: {output_path}")

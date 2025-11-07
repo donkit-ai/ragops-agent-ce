@@ -47,8 +47,7 @@ server = FastMCP(
         "splits them into smaller text chunks, "
         "and saves to projects/<project_id>/processed/chunked/. "
         "Supports incremental processing - only new/modified files. "
-        "Support only text files eg. .txt, .json"
-        "MUST always use JSON chunking!"  # TODO: remove when can read in md
+        "Support only .json"
     ).strip(),
 )
 async def chunk_documents(args: ChunkDocumentsArgs) -> str:
