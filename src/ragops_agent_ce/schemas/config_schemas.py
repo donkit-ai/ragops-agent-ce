@@ -60,6 +60,14 @@ class GenerationModelType(StrEnum):
     VERTEX = auto()
 
 
+class ReadingFormat(StrEnum):
+    """Supported reading formats."""
+
+    JSON = auto()
+    MD = auto()
+    TEXT = auto()
+
+
 class SplitType(StrEnum):
     """Text splitting methods for chunking."""
 
@@ -67,7 +75,7 @@ class SplitType(StrEnum):
     SENTENCE = auto()
     PARAGRAPH = auto()
     SEMANTIC = auto()
-    JSON = auto()
+    MARKDOWN = auto()
 
 
 class RetrieverType(StrEnum):
@@ -136,12 +144,19 @@ class Embedder(BaseModel):
     )
 
 
+SPLITTER_DESCRIPTION = """
+Chunking strategy to apply to incoming content.
+- If raw file was read into JSON format by `process documents`, 
+will use RecursiveJsonSplitter (overlap ignored).
+- For MARKDOWN type, uses MarkdownTextSplitter with awareness of headers, lists, and code blocks.
+- For TEXT type use any of CHARACTER, SENTENCE, PARAGRAPH, SEMANTIC.
+""".strip()
+
+
 class ChunkingConfig(BaseModel):
     """Document chunking configuration."""
 
-    split_type: SplitType = Field(
-        default=SplitType.JSON, description="Use only JSON for .json files chunking"
-    )
+    split_type: SplitType = Field(default=SplitType.SEMANTIC, description=SPLITTER_DESCRIPTION)
     chunk_size: int = Field(default=250)
     chunk_overlap: int = Field(default=0)
 
@@ -194,6 +209,7 @@ class RagConfig(BaseModel):
     ranker: bool = Field(default=False)
     db_type: Literal["qdrant", "chroma", "milvus"] = Field(default="qdrant")
     retriever_options: RetrieverOptions = Field(default_factory=RetrieverOptions)
+    reading_format: ReadingFormat = Field(default=ReadingFormat.JSON)
     chunking_options: ChunkingConfig = Field(default_factory=ChunkingConfig)
     generation_model_type: GenerationModelType = Field(
         description=GENERATION_MODEL_TYPE_DESCRIPTION
