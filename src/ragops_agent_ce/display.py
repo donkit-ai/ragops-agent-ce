@@ -50,46 +50,6 @@ def create_checklist_panel(checklist_text: str | None, *, title: str = "Checklis
     )
 
 
-def render_project(
-    transcript_lines: list[str],
-    checklist_text: str | None = None,
-    *,
-    agent_settings: AgentSettings,
-    show_prompt: bool = False,
-) -> None:
-    """
-    Clear screen and render conversation panel alongside checklist panel.
-
-    Args:
-        transcript_lines: Conversation transcript
-        checklist_text: Checklist content (Rich markup)
-        show_prompt: Reserve space for input prompt
-    """
-    clear_screen_aggressive()
-
-    width, height = shutil.get_terminal_size()
-    height -= 3  # Reserve space for input prompt
-    right_width = 50
-
-    right_panels = [create_status_panel(agent_settings)]
-    if checklist_text:
-        checklist_panel = create_checklist_panel(checklist_text)
-        right_panels.append(checklist_panel)
-
-    table = Table(show_header=False, show_edge=False, padding=(0, 0), box=None, expand=True)
-    table.add_column(width=width - right_width)
-    table.add_column(width=right_width)
-    table.add_row(
-        create_transcript_panel(
-            transcript_lines,
-            width=width - right_width,
-        ),
-        Align(Group(*right_panels, fit=False), vertical="bottom"),
-    )
-
-    console.print(table)
-
-
 def clear_screen_aggressive() -> None:
     """
     Perform aggressive screen clearing to completely remove old content.
@@ -241,19 +201,39 @@ class ScreenRenderer:
     Manages the overall screen layout and rendering coordination.
     """
 
+    @staticmethod
     def render_project(
-        self,
         transcript: list[str],
         checklist_text: str | None,
         agent_settings: AgentSettings,
-        show_input_space: bool = False,
     ) -> None:
         """Render conversation with a checklist panel on the right."""
-        render_project(
-            transcript, checklist_text, agent_settings=agent_settings, show_prompt=show_input_space
+        clear_screen_aggressive()
+
+        width, height = shutil.get_terminal_size()
+        height -= 3  # Reserve space for input prompt
+        right_width = 50
+
+        right_panels = [create_status_panel(agent_settings)]
+        if checklist_text:
+            checklist_panel = create_checklist_panel(checklist_text)
+            right_panels.append(checklist_panel)
+
+        table = Table(show_header=False, show_edge=False, padding=(0, 0), box=None, expand=True)
+        table.add_column(width=width - right_width)
+        table.add_column(width=right_width)
+        table.add_row(
+            create_transcript_panel(
+                transcript,
+                width=width - right_width,
+            ),
+            Align(Group(*right_panels, fit=False), vertical="bottom"),
         )
 
-    def render_startup_screen(self) -> None:
+        console.print(table)
+
+    @staticmethod
+    def render_startup_screen() -> None:
         """Render the initial startup screen."""
         clear_screen_aggressive()
 
@@ -272,7 +252,8 @@ class ScreenRenderer:
         console.print("[dim]Type your message and press Enter to start...[/dim]")
         console.print()
 
-    def render_goodbye_screen(self) -> None:
+    @staticmethod
+    def render_goodbye_screen() -> None:
         """Render the goodbye screen on exit."""
         console.print()
         console.print("[bold blue]👋 Goodbye![/bold blue]")

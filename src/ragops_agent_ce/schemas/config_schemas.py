@@ -131,7 +131,7 @@ EMBEDDER_TYPE_DESCRIPTION = f"""
 class Embedder(BaseModel):
     """Embedder configuration."""
 
-    embedder_type: str = Field(default=EmbedderType.VERTEX, description=EMBEDDER_TYPE_DESCRIPTION)
+    embedder_type: str = Field(default=..., description=EMBEDDER_TYPE_DESCRIPTION)
     model_name: str | None = Field(
         default=None,
         description=(

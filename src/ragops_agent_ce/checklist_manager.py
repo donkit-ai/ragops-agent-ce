@@ -8,11 +8,11 @@ Follows Single Responsibility Principle - manages only checklist-related operati
 from __future__ import annotations
 
 import json
-import threading
-import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from typing import Protocol
 
 from ragops_agent_ce.display import ScreenRenderer
 from ragops_agent_ce.schemas.agent_schemas import AgentSettings
@@ -120,144 +120,60 @@ def format_checklist_compact(checklist_data: dict[str, Any] | None) -> str:
     return "\n".join(lines)
 
 
-class ChecklistWatcher:
-    """
-    Watches for checklist file changes and updates transcript in real-time.
+class _HistoryEntry(Protocol):
+    """Protocol describing minimal interface of history entries used by helpers."""
 
-    Manages background thread for file monitoring and transcript integration.
-    """
+    content: str | None
 
-    def __init__(
-        self,
-        transcript_ref: list[str],
-        agent_settings: AgentSettings,
-        session_start_mtime: float | None = None,
-    ):
-        self.transcript_ref = transcript_ref
-        self.agent_settings = agent_settings
-        self.session_start_mtime = session_start_mtime
 
-        # Initialize last_seen_mtime to current newest file time to ignore existing checklists
-        if session_start_mtime is not None:
-            baseline = session_start_mtime
-        else:
-            _, latest_mtime = _latest_checklist()
-            baseline = latest_mtime
-        self.last_seen_mtime_ref = [baseline or 0.0]  # Mutable reference
+def _update_active_checklist_from_history(history: Sequence[_HistoryEntry]) -> None:
+    """Update `active_checklist` name based on the latest tool response."""
 
-        self.running = False
-        self.thread: threading.Thread | None = None
-        self._checklist_message_index: int | None = None
-        self._last_update_time = 0.0
-
-    def start(self) -> None:
-        """Start the checklist watcher background thread."""
-        if self.running:
-            return
-
-        self.running = True
-        self.thread = threading.Thread(target=self._watch_loop, daemon=True)
-        self.thread.start()
-
-    def stop(self) -> None:
-        """Stop the checklist watcher background thread."""
-        self.running = False
-        if self.thread:
-            self.thread.join(timeout=1.0)
-
-    def _update_checklist_in_transcript(self, checklist_lines: str) -> None:
-        """
-        Previously injected checklist into transcript. Now we render checklist in a side panel,
-        so avoid injecting into transcript to prevent duplication. Also remove any previously
-        injected checklist lines if present.
-
-        Args:
-            checklist_lines: Formatted checklist content
-        """
-        # Remove previously injected checklist from transcript if exists
-        try:
-            if self._checklist_message_index is not None:
-                idx = self._checklist_message_index
-                if 0 <= idx < len(self.transcript_ref):
-                    # Remove the checklist content line
-                    self.transcript_ref.pop(idx)
-                    # Try to remove header line if it exists right before
-                    if (
-                        idx - 1 >= 0
-                        and self.transcript_ref[idx - 1].strip()
-                        == "[dim]--- Checklist Created ---[/dim]"
-                    ):
-                        self.transcript_ref.pop(idx - 1)
-                self._checklist_message_index = None
-        except Exception:
-            # Best-effort cleanup; ignore any errors
-            self._checklist_message_index = None
-
-        # No further action: checklist is rendered in the side panel now
+    if not history:
+        return
+    try:
+        tool_result = history[-1].content or "{}"
+        parsed = json.loads(tool_result)
+    except (AttributeError, json.JSONDecodeError, ValueError, TypeError, IndexError):
         return
 
-    def _watch_loop(self) -> None:
-        """
-        Background thread loop for monitoring checklist file changes.
-
-        Polls for file changes and triggers transcript updates when needed.
-        """
-        while self.running:
-            try:
-                cur_name, cur_mtime = _latest_checklist()
-                if cur_mtime and cur_mtime > self.last_seen_mtime_ref[0]:
-                    if self.session_start_mtime and cur_mtime < self.session_start_mtime:
-                        # Ignore checklists created before this session
-                        time.sleep(0.1)
-                        continue
-                    current_checklist_data = _load_checklist(cur_name) if cur_name else None
-                    new_checklist_content = format_checklist_compact(current_checklist_data)
-                    self.last_seen_mtime_ref[0] = cur_mtime
-                    self._last_update_time = time.time()
-                    self._update_checklist_in_transcript(new_checklist_content)
-
-                    # Notify that checklist was updated (callback can be added if needed)
-                    self._on_checklist_updated()
-
-                time.sleep(0.1)  # Check every 100ms
-            except Exception:
-                time.sleep(1.0)  # Longer sleep on error
-
-    def _on_checklist_updated(self) -> None:
-        """Hook for checklist update notifications. Override in subclass if needed."""
-        pass
+    if isinstance(parsed, dict) and parsed.get("name"):
+        active_checklist.name = f"{parsed['name']}.json"
 
 
-class ChecklistWatcherWithRenderer(ChecklistWatcher):
-    """
-    Extended ChecklistWatcher that integrates with ScreenRenderer.
+def handle_checklist_tool_event(
+    tool_name: str | None,
+    history: Sequence[_HistoryEntry],
+    *,
+    renderer: ScreenRenderer | None,
+    transcript: list[str],
+    agent_settings: AgentSettings,
+    session_start_mtime: float | None,
+    render: bool,
+) -> None:
+    """Handle checklist-related tool events emitted by the agent stream."""
 
-    Automatically triggers screen re-rendering when checklist updates.
-    """
-
-    def __init__(
-        self,
-        transcript_ref: list[str],
-        agent_settings: AgentSettings,
-        renderer: ScreenRenderer | None = None,
-        session_start_mtime: float | None = None,
+    if tool_name not in (
+        "checklist_get_checklist",
+        "checklist_create_checklist",
+        "checklist_update_checklist_item",
     ):
-        super().__init__(transcript_ref, agent_settings, session_start_mtime=session_start_mtime)
-        self.renderer = renderer
+        return
 
-    def _on_checklist_updated(self) -> None:
-        """Trigger screen re-render when checklist is updated."""
-        if self.renderer:
-            try:
-                cl_text = get_active_checklist_text(self.session_start_mtime)
-                self.renderer.render_project(
-                    self.transcript_ref,
-                    cl_text,
-                    agent_settings=self.agent_settings,
-                    show_input_space=True,
-                )
-            except Exception:
-                pass  # Ignore render errors during input
+    _update_active_checklist_from_history(history)
+
+    if not render or renderer is None:
+        return
+
+    try:
+        cl_text = get_active_checklist_text(session_start_mtime)
+        renderer.render_project(
+            transcript,
+            cl_text,
+            agent_settings=agent_settings,
+        )
+    except Exception:
+        pass
 
 
 def get_current_checklist() -> str:

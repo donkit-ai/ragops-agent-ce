@@ -759,7 +759,7 @@ class InteractiveSelect:
             return self._interactive_select()
         except (ImportError, OSError):
             # Fallback to numbered selection
-            return self._fallback_select()
+            return self.fallback_select()
 
     def _interactive_select(self) -> str | None:
         if not sys.stdin.isatty() and not MSVCRT_AVAILABLE:
@@ -820,7 +820,7 @@ class InteractiveSelect:
                 if old_settings is not None:
                     termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-    def _fallback_select(self) -> str | None:
+    def fallback_select(self) -> str | None:
         """Fallback to numbered selection for incompatible terminals."""
         from rich.markup import escape
 
@@ -914,7 +914,7 @@ class InteractiveConfirm:
         try:
             return self._interactive_confirm()
         except (ImportError, OSError):
-            return self._fallback_confirm()
+            return self.fallback_confirm()
 
     def _interactive_confirm(self) -> bool | None:
         if not sys.stdin.isatty() and not MSVCRT_AVAILABLE:
@@ -973,7 +973,7 @@ class InteractiveConfirm:
                 if old_settings is not None:
                     termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-    def _fallback_confirm(self) -> bool | None:
+    def fallback_confirm(self) -> bool | None:
         """Fallback to y/n input for incompatible terminals."""
         console.print()
         default_str = "Y/n" if self.default else "y/N"
@@ -1039,7 +1039,7 @@ def interactive_select(
 
     # Fallback for incompatible terminals
     selector = InteractiveSelect(choices, title, default_index=default_index)
-    return selector._fallback_select()
+    return selector.fallback_select()
 
 
 def interactive_confirm(question: str, default: bool = True) -> bool | None:
@@ -1059,4 +1059,4 @@ def interactive_confirm(question: str, default: bool = True) -> bool | None:
 
     # Fallback for incompatible terminals
     confirmer = InteractiveConfirm(question, default)
-    return confirmer._fallback_confirm()
+    return confirmer.fallback_confirm()

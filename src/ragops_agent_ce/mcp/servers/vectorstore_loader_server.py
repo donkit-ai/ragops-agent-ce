@@ -127,8 +127,9 @@ async def vectorstore_load(
     params = args.params
     if "localhost" not in params.database_uri:
         return (
-            "Error: database URI must be outside "
+            "Error: database URI arg must be outside "
             "docker like 'localhost' or '127.0.0.1' or '0.0.0.0'"
+            "don`t update it in rag config, use `localhost` only in args."
         )
 
     # Determine files to load based on chunks_path

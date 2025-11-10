@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Literal
+from enum import StrEnum
+from enum import auto
 
 from loguru import logger
 
@@ -29,11 +30,18 @@ from .tools import tool_read_file
 from .tools import tool_time_now
 
 
+class EventType(StrEnum):
+    CONTENT = auto()
+    TOOL_CALL_START = auto()
+    TOOL_CALL_END = auto()
+    TOOL_CALL_ERROR = auto()
+
+
 @dataclass
 class StreamEvent:
     """Event yielded during streaming response."""
 
-    type: Literal["content", "tool_call_start", "tool_call_end", "tool_call_error"]
+    type: EventType
     content: str | None = None
     tool_name: str | None = None
     tool_args: dict | None = None
@@ -74,7 +82,7 @@ class LLMAgent:
         self.mcp_tools: dict[str, tuple[dict, MCPClient]] = {}
         self.max_iterations = max_iterations
 
-    async def _ainit_mcp_tools(self) -> None:
+    async def ainit_mcp_tools(self) -> None:
         """Initialize MCP tools asynchronously. Call this after creating the agent."""
         for client in self.mcp_clients:
             try:
@@ -253,7 +261,9 @@ class LLMAgent:
         """
         if not self.provider.supports_streaming():
             # Yield the full response as a single content event
-            yield StreamEvent(type="content", content=await self.arespond(messages, model=model))
+            yield StreamEvent(
+                type=EventType.CONTENT, content=await self.arespond(messages, model=model)
+            )
             return
 
         tools = self._tool_specs() if self.provider.supports_tools() else None
@@ -262,7 +272,7 @@ class LLMAgent:
             for chunk in self.provider.generate_stream(messages, tools=tools, model=model):
                 # Yield text chunks as they arrive
                 if chunk.content:
-                    yield StreamEvent(type="content", content=chunk.content)
+                    yield StreamEvent(type=EventType.CONTENT, content=chunk.content)
 
                 # Handle tool calls immediately when they arrive
                 if chunk.tool_calls and self.provider.supports_tools():
@@ -275,7 +285,9 @@ class LLMAgent:
 
                         # Yield tool call start event
                         yield StreamEvent(
-                            type="tool_call_start", tool_name=tc.function.name, tool_args=args
+                            type=EventType.TOOL_CALL_START,
+                            tool_name=tc.function.name,
+                            tool_args=args,
                         )
 
                         try:
@@ -291,7 +303,9 @@ class LLMAgent:
                                 )
                             )
                             # Yield tool call end event
-                            yield StreamEvent(type="tool_call_end", tool_name=tc.function.name)
+                            yield StreamEvent(
+                                type=EventType.TOOL_CALL_END, tool_name=tc.function.name
+                            )
                         except Exception as e:
                             error_msg = str(e)
                             logger.error(f"Tool {tc.function.name} failed: {error_msg}")
@@ -306,7 +320,9 @@ class LLMAgent:
                             )
                             # Yield tool call error event
                             yield StreamEvent(
-                                type="tool_call_error", tool_name=tc.function.name, error=error_msg
+                                type=EventType.TOOL_CALL_ERROR,
+                                tool_name=tc.function.name,
+                                error=error_msg,
                             )
                     # Break inner loop to start new iteration with tool results
                     break

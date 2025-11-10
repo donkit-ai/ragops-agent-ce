@@ -11,10 +11,14 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from rich.console import Console
+from rich.text import Text
+
 from ragops_agent_ce.credential_checker import check_provider_credentials
 from ragops_agent_ce.db import kv_get
 from ragops_agent_ce.db import kv_set
 from ragops_agent_ce.db import open_db
+from ragops_agent_ce.interactive_input import interactive_select
 
 if TYPE_CHECKING:
     pass
@@ -108,10 +112,6 @@ def select_model_at_startup(
     Returns:
         Tuple of (provider, model) or None if cancelled
     """
-    from rich.console import Console
-    from rich.text import Text
-
-    from ragops_agent_ce.interactive_input import interactive_select
 
     console = Console()
     env_path = env_path or Path.cwd() / ".env"
@@ -216,9 +216,9 @@ def select_model_at_startup(
 
                 # Set provider in config and run configuration
                 wizard.config["RAGOPS_LLM_PROVIDER"] = selected_provider
-                if wizard._configure_provider(selected_provider):
+                if wizard.configure_provider(selected_provider):
                     # Save configuration
-                    if wizard._save_config():
+                    if wizard.save_config():
                         provider_display = PROVIDERS[selected_provider]["display"]
                         console.print(f"\n✓ {provider_display} configured!\n")
                         # Re-check credentials after configuration
