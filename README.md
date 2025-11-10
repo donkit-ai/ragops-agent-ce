@@ -12,10 +12,9 @@ Built by [Donkit AI](https://donkit.ai) - Open Source RAG Infrastructure.
 
 * **Interactive REPL** — Start an interactive session with readline history and autocompletion
 * **Checklist-driven workflow** — The agent creates project checklists, asks for approval before each step, and tracks progress
-* **Multi-language support** — Automatically detects and responds in the user's language
 * **Session-scoped checklists** — Only current session checklists appear in the UI
-* **Integrated MCP servers** — Built-in support for planning, chunking, and vector loading
-* **Docker Compose orchestration** — Automated deployment of RAG infrastructure (Qdrant, RAG service)
+* **Integrated MCP servers** — Built-in support for full RAG build pipeline (planning, chunking, reading, vector loading)
+* **Docker Compose orchestration** — Automated deployment of RAG infrastructure (vector DB, RAG service)
 * **Multiple LLM providers** — Supports Vertex AI (Recommended), OpenAI, Azure OpenAI, Ollama, OpenRouter. Coming soon: Anthropic Claude
 
 ## Installation
@@ -96,7 +95,7 @@ Or create a `.env` file manually in your working directory:
 
 ```bash
 # Vertex AI (Google Cloud)
-RAGOPS_LLM_PROVIDER=vertexai
+RAGOPS_LLM_PROVIDER=vertex
 RAGOPS_VERTEX_CREDENTIALS=/path/to/service-account-key.json
 
 # OpenAI

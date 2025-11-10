@@ -42,14 +42,14 @@ class SetupWizard:
         self.config["RAGOPS_LLM_PROVIDER"] = provider
 
         # Step 2: Configure provider credentials
-        if not self._configure_provider(provider):
+        if not self.configure_provider(provider):
             return False
 
         # Step 3: Optional settings
         self._configure_optional_settings()
 
         # Step 4: Save configuration
-        return self._save_config()
+        return self.save_config()
 
     def _show_welcome(self) -> None:
         """Show welcome message."""
@@ -143,7 +143,7 @@ class SetupWizard:
         console.print(f"\n✓ Selected: [green]{providers[provider_key]['display']}[/green]\n")
         return provider
 
-    def _configure_provider(self, provider: str) -> bool:
+    def configure_provider(self, provider: str) -> bool:
         """Configure credentials for chosen provider."""
         console.print(f"[bold]Step 2:[/bold] Configure {provider} credentials\n")
 
@@ -389,7 +389,7 @@ class SetupWizard:
         else:
             console.print("[dim]Using default log level: ERROR[/dim]\n")
 
-    def _save_config(self) -> bool:
+    def save_config(self) -> bool:
         """Save configuration to .env file."""
         console.print("[bold]Step 4:[/bold] Save configuration\n")
 

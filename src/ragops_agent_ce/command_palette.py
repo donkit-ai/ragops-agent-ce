@@ -81,14 +81,6 @@ class CommandRegistry:
         )
         self.register(
             Command(
-                name="/quit",
-                description="Exit the agent",
-                category="Navigation",
-                template=":q",
-            )
-        )
-        self.register(
-            Command(
                 name="/exit",
                 description="Exit the agent",
                 category="Navigation",
