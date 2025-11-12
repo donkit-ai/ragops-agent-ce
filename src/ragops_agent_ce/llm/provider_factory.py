@@ -15,6 +15,7 @@ PROVIDER_PATHS: dict[str, tuple[str, str]] = {
     "openrouter": ("ragops_agent_ce.llm.providers.openai", "OpenAIProvider"),
     "mock": ("ragops_agent_ce.llm.providers.mock", "MockProvider"),
     "vertex": ("ragops_agent_ce.llm.providers.vertex", "VertexProvider"),
+    "donkit": ("ragops_agent_ce.llm.providers.donkit", "DonkitProvider"),
 }
 
 
