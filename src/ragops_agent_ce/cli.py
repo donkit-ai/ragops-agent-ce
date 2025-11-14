@@ -11,35 +11,34 @@ import typer
 from loguru import logger
 from rich.console import Console
 
+from ragops_agent_ce import __version__
 from ragops_agent_ce import texts
+from ragops_agent_ce.agent.agent import LLMAgent
+from ragops_agent_ce.agent.agent import default_tools
+from ragops_agent_ce.agent.prompts import OPENAI_SYSTEM_PROMPT
+from ragops_agent_ce.agent.prompts import VERTEX_SYSTEM_PROMPT
 from ragops_agent_ce.cli_helpers import format_model_choices
 from ragops_agent_ce.cli_helpers import get_available_models
 from ragops_agent_ce.cli_helpers import select_provider_interactively
 from ragops_agent_ce.cli_helpers import validate_model_choice
+from ragops_agent_ce.config import load_settings
+from ragops_agent_ce.display import ScreenRenderer
+from ragops_agent_ce.interactive_input import get_user_input
+from ragops_agent_ce.interactive_input import interactive_select
+from ragops_agent_ce.llm.provider_factory import get_provider
+from ragops_agent_ce.llm.types import Message
+from ragops_agent_ce.logging_config import setup_logging
+from ragops_agent_ce.mcp.client import MCPClient
+from ragops_agent_ce.model_selector import PROVIDERS
+from ragops_agent_ce.model_selector import save_model_selection
+from ragops_agent_ce.model_selector import select_model_at_startup
+from ragops_agent_ce.prints import RAGOPS_LOGO_ART
+from ragops_agent_ce.prints import RAGOPS_LOGO_TEXT
 from ragops_agent_ce.repl_helpers import MCPEventHandler
 from ragops_agent_ce.repl_helpers import build_stream_render_helper
 from ragops_agent_ce.repl_helpers import format_timestamp
 from ragops_agent_ce.schemas.agent_schemas import AgentSettings
-
-from . import __version__
-from .agent.agent import LLMAgent
-from .agent.agent import default_tools
-from .agent.prompts import OPENAI_SYSTEM_PROMPT
-from .agent.prompts import VERTEX_SYSTEM_PROMPT
-from .config import load_settings
-from .display import ScreenRenderer
-from .interactive_input import get_user_input
-from .interactive_input import interactive_select
-from .llm.provider_factory import get_provider
-from .llm.types import Message
-from .logging_config import setup_logging
-from .mcp.client import MCPClient
-from .model_selector import PROVIDERS
-from .model_selector import save_model_selection
-from .model_selector import select_model_at_startup
-from .prints import RAGOPS_LOGO_ART
-from .prints import RAGOPS_LOGO_TEXT
-from .setup_wizard import run_setup_if_needed
+from ragops_agent_ce.setup_wizard import run_setup_if_needed
 
 app = typer.Typer(
     pretty_exceptions_enable=False,
@@ -219,7 +218,6 @@ async def _astart_repl(
     if commands:
         for cmd_str in commands:
             cmd_parts = shlex.split(cmd_str)
-            logger.debug(f"Starting MCP client: {cmd_parts}")
             mcp_clients.append(
                 MCPClient(
                     cmd_parts[0], cmd_parts[1:], progress_callback=mcp_handler.progress_callback
@@ -239,15 +237,8 @@ async def _astart_repl(
     rendered_welcome = _render_markdown_to_rich(texts.WELCOME_MESSAGE)
     render_helper.append_agent_message(rendered_welcome)
     while True:
-        try:
-            render_helper.render_current_screen()
-            user_input = get_user_input()
-        except (EOFError, KeyboardInterrupt):
-            transcript.append(texts.EXITING_REPL)
-            render_helper.render_current_screen()
-            renderer.render_goodbye_screen()
-            break
-
+        render_helper.render_current_screen()
+        user_input = get_user_input()
         if not user_input:
             continue
 
@@ -430,8 +421,7 @@ async def _astart_repl(
                 elif not interrupted and not reply:
                     # No reply but no interruption - likely an error was swallowed
                     error_msg = (
-                        f"{format_timestamp()} [bold red]Error:[/bold red] "
-                        "No response from agent"
+                        f"{format_timestamp()} [bold red]Error:[/bold red] No response from agent"
                     )
                     if response_index is not None:
                         transcript[response_index] = error_msg

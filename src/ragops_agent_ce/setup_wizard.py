@@ -85,43 +85,55 @@ class SetupWizard:
         console.print(Panel(welcome_text, title="🚀 Setup", border_style="cyan"))
         console.print()
 
-    def _choose_provider(self) -> str | None:
+    def _choose_provider(self, use_case: str = "chat") -> str | None:
         """Let user choose LLM provider."""
-        console.print("[bold]Step 1:[/bold] Choose your LLM provider\n")
-
+        if use_case == "embeddings":
+            console.print("[bold]Step 1:[/bold] Choose your embeddings provider\n")
+        else:
+            console.print("[bold]Step 1:[/bold] Choose your LLM provider\n")
         providers = {
             "1": {
                 "name": "vertex",
                 "display": "Vertex AI (Google Cloud)",
                 "description": "Google's Gemini models via Vertex AI",
                 "available": True,
+                "has_embeddings": "default",
             },
             "2": {
                 "name": "openai",
                 "display": "OpenAI",
                 "description": "ChatGPT API and compatible providers",
                 "available": True,
+                "has_embeddings": "default",
             },
             "3": {
                 "name": "azure_openai",
                 "display": "Azure OpenAI",
                 "description": "OpenAI models via Azure",
                 "available": True,
+                "has_embeddings": "custom",
             },
             "4": {
                 "name": "ollama",
                 "display": "Ollama (Local)",
                 "description": "Local LLM server (OpenAI-compatible)",
                 "available": True,
-            },
-            "5": {
-                "name": "openrouter",
-                "display": "OpenRouter",
-                "description": "Access 100+ models via OpenRouter API",
-                "available": True,
+                "has_embeddings": False,
             },
         }
-
+        if use_case == "chat":
+            providers.update(
+                {
+                    "5": {
+                        "name": "openrouter",
+                        "display": "OpenRouter",
+                        "description": "Access 100+ models via OpenRouter API (chat models only, "
+                        "needs separate embeddings provider)",
+                        "available": True,
+                        "has_embeddings": False,
+                    }
+                }
+            )
         # Build list of available choices for interactive selection
         available_providers = [(key, info) for key, info in providers.items() if info["available"]]
         choices = [
@@ -129,8 +141,10 @@ class SetupWizard:
         ]
 
         # Use interactive selection
-        selected = interactive_select(choices=choices, title="Choose your LLM provider")
-
+        if use_case == "embeddings":
+            selected = interactive_select(choices=choices, title="Choose your embeddings provider")
+        else:
+            selected = interactive_select(choices=choices, title="Choose your LLM provider")
         if selected is None:
             console.print("[red]Setup cancelled[/red]")
             return None
@@ -143,24 +157,25 @@ class SetupWizard:
         console.print(f"\n✓ Selected: [green]{providers[provider_key]['display']}[/green]\n")
         return provider
 
-    def configure_provider(self, provider: str) -> bool:
+    def configure_provider(self, provider: str, use_case: str = "chat") -> bool:
         """Configure credentials for chosen provider."""
         console.print(f"[bold]Step 2:[/bold] Configure {provider} credentials\n")
-
-        if provider == "vertex":
-            return self._configure_vertex()
-        elif provider == "openai":
-            return self._configure_openai()
-        elif provider == "azure_openai":
-            return self._configure_azure_openai()
-        elif provider == "anthropic":
-            return self._configure_anthropic()
-        elif provider == "ollama":
-            return self._configure_ollama()
-        elif provider == "openrouter":
-            return self._configure_openrouter()
-
-        return False
+        match provider:
+            case "vertex":
+                return self._configure_vertex()
+            case "openai":
+                return self._configure_openai(use_case)
+            case "azure_openai":
+                return self._configure_azure_openai(use_case)
+            case "anthropic":
+                return self._configure_anthropic()
+            case "ollama":
+                return self._configure_ollama(use_case)
+            case "openrouter":
+                return self._configure_openrouter()
+            case _:
+                console.print(f"[red]✗ Unknown provider: {provider}[/red]")
+                return False
 
     def _configure_vertex(self) -> bool:
         """Configure Vertex AI credentials."""
@@ -183,7 +198,7 @@ class SetupWizard:
         console.print(f"✓ Credentials file: [green]{path}[/green]\n")
         return True
 
-    def _configure_openai(self) -> bool:
+    def _configure_openai(self, use_case: str = "chat") -> bool:
         """Configure OpenAI credentials."""
         console.print("[dim]Get your API key at: https://platform.openai.com/api-keys[/dim]")
         console.print("[dim]Or use any OpenAI-compatible API provider[/dim]\n")
@@ -208,13 +223,14 @@ class SetupWizard:
         self.config["RAGOPS_OPENAI_API_KEY"] = api_key
 
         # Optional model name
-        console.print()
-        use_custom_model = interactive_confirm("Specify model name?", default=False)
+        if use_case == "chat":
+            console.print()
+            use_custom_model = interactive_confirm("Specify model name?", default=False)
 
-        if use_custom_model:
-            model = Prompt.ask("Enter model name", default="gpt-5")
-            self.config["RAGOPS_LLM_MODEL"] = model
-            console.print(f"✓ Model: [green]{model}[/green]")
+            if use_custom_model:
+                model = Prompt.ask("Enter model name", default="gpt-5")
+                self.config["RAGOPS_LLM_MODEL"] = model
+                console.print(f"✓ Model: [green]{model}[/green]")
 
         # Optional embedding model
         console.print()
@@ -261,12 +277,23 @@ class SetupWizard:
             retry = Confirm.ask("Continue anyway?", default=False)
             if not retry:
                 return self._configure_anthropic()
-
+        console.print(
+            "Anthropic claude does not support embeddings,"
+            "please configure a separate provider for embeddings"
+        )
+        embeddings_provider = self._choose_provider(use_case="embeddings")
+        configured = self.configure_provider(embeddings_provider)
+        if not configured:
+            retry = Confirm.ask("Try again?", default=True)
+            if retry:
+                return self.configure_provider(embeddings_provider)
+            else:
+                return False
         self.config["RAGOPS_ANTHROPIC_API_KEY"] = api_key
         console.print("✓ API key configured\n")
         return True
 
-    def _configure_azure_openai(self) -> bool:
+    def _configure_azure_openai(self, use_case: str = "chat") -> bool:
         """Configure Azure OpenAI credentials."""
         console.print("[dim]You need credentials from Azure OpenAI service.[/dim]")
         console.print("[dim]Get them at: https://portal.azure.com[/dim]\n")
@@ -291,45 +318,56 @@ class SetupWizard:
                 return self._configure_azure_openai()
 
         api_version = Prompt.ask("Enter API version", default="2024-02-15-preview")
-        deployment = Prompt.ask("Enter chat completion deployment name (e.g., gpt-5)")
+        if use_case == "chat":
+            deployment = Prompt.ask("Enter chat completion deployment name (e.g., gpt-5)")
+        else:
+            deployment = None
         embeddings_deployment = Prompt.ask(
             "Enter embeddings deployment name (e.g., text-embedding-ada-002)",
             default="text-embedding-ada-002",
         )
-
         self.config["RAGOPS_AZURE_OPENAI_API_KEY"] = api_key
         self.config["RAGOPS_AZURE_OPENAI_ENDPOINT"] = endpoint
         self.config["RAGOPS_AZURE_OPENAI_API_VERSION"] = api_version
-        self.config["RAGOPS_AZURE_OPENAI_DEPLOYMENT"] = deployment
+        if deployment:
+            self.config["RAGOPS_AZURE_OPENAI_DEPLOYMENT"] = deployment
         self.config["RAGOPS_AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT"] = embeddings_deployment
 
         console.print("✓ Azure OpenAI configured\n")
         return True
 
-    def _configure_ollama(self) -> bool:
+    def _configure_ollama(self, use_case: str = "chat") -> bool:
         """Configure Ollama local instance."""
         console.print("[dim]Make sure Ollama is installed and running.[/dim]")
         console.print("[dim]Install at: https://ollama.ai[/dim]\n")
 
-        # Ollama uses OpenAI-compatible API, so we save to OpenAI env vars
-        default_url = "http://localhost:11434/api/v1"
+        # Ollama uses its own host configuration
+        default_url = "http://localhost:11434/v1"
         base_url = Prompt.ask("Ollama base URL", default=default_url)
 
-        # Ollama doesn't require API key, but we need to set something
-        self.config["RAGOPS_OPENAI_API_KEY"] = "ollama"
-        self.config["RAGOPS_OPENAI_BASE_URL"] = base_url
+        self.config["RAGOPS_OLLAMA_BASE_URL"] = base_url
         console.print(f"✓ Ollama URL: [green]{base_url}[/green]")
 
         # Chat model name
         console.print()
-        chat_model = Prompt.ask("Enter chat model name", default="mistral")
-        self.config["RAGOPS_LLM_MODEL"] = chat_model
-        console.print(f"✓ Chat model: [green]{chat_model}[/green]")
+        if use_case == "chat":
+            chat_model = Prompt.ask("Enter chat model name", default="gpt-oss:20b")
+            self.config["RAGOPS_LLM_MODEL"] = chat_model
+            self.config["RAGOPS_OLLAMA_CHAT_MODEL"] = chat_model
+            console.print(f"✓ Chat model: [green]{chat_model}[/green]")
+            console.print()
+            vision_model = Prompt.ask(
+                "Ensure that the chat model is supports VISION, "
+                "otherwise specify a vision model (for image analysis)",
+                default=chat_model,
+            )
+            self.config["RAGOPS_OLLAMA_VISION_MODEL"] = vision_model
+            console.print(f"✓ Vision model: [green]{vision_model}[/green]")
 
         # Embedding model name
         console.print()
-        embedding_model = Prompt.ask("Enter embedding model name", default="nomic-embed-text")
-        self.config["RAGOPS_OPENAI_EMBEDDINGS_MODEL"] = embedding_model
+        embedding_model = Prompt.ask("Enter embedding model name", default="embeddinggemma")
+        self.config["RAGOPS_OLLAMA_EMBEDDINGS_MODEL"] = embedding_model
         console.print(f"✓ Embedding model: [green]{embedding_model}[/green]")
 
         console.print("✓ Ollama configured\n")
@@ -358,15 +396,19 @@ class SetupWizard:
         chat_model = Prompt.ask("Enter chat model name", default="openai/gpt-4o-mini")
         self.config["RAGOPS_LLM_MODEL"] = chat_model
         console.print(f"✓ Chat model: [green]{chat_model}[/green]")
-
-        # Embedding model name
-        console.print()
-        embedding_model = Prompt.ask(
-            "Enter embedding model name", default="openai/text-embedding-3-small"
+        console.print(
+            "Openrouter does not support embeddings, "
+            "please configure a separate provider for embeddings"
         )
-        self.config["RAGOPS_OPENAI_EMBEDDINGS_MODEL"] = embedding_model
-        console.print(f"✓ Embedding model: [green]{embedding_model}[/green]")
-
+        embeddings_provider = self._choose_provider(use_case="embeddings")
+        configured = self.configure_provider(embeddings_provider, use_case="embeddings")
+        if not configured:
+            retry = Confirm.ask("Try again?", default=True)
+            if retry:
+                return self.configure_provider(embeddings_provider)
+            else:
+                return False
+        # Embedding model name
         console.print("✓ OpenRouter configured\n")
         return True
 
@@ -436,92 +478,58 @@ class SetupWizard:
 
         # Save to .env
         try:
-            # Merge: existing config + new config (new values override existing)
-            merged_config = {**existing_config, **self.config}
+            self.env_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Build lines preserving comments and structure
-            lines = []
+            # For new files we keep structured output
             if not existing_config:
-                # New file - add header
-                lines.extend(
-                    [
-                        "# RAGOps Agent CE Configuration",
-                        "# Generated by setup wizard",
-                        "",
-                    ]
-                )
-            else:
-                # Updating existing file - add comment about update
-                lines.extend(
-                    [
-                        "# RAGOps Agent CE Configuration",
-                        f"# Updated: {self.config.get('RAGOPS_LLM_PROVIDER', 'unknown')} provider",
-                        "",
-                    ]
-                )
+                lines = [
+                    "# RAGOps Agent CE Configuration",
+                    "# Generated by setup wizard",
+                    "",
+                ]
 
-            # Group config by provider for better organization
-            # First, add the main provider setting
-            if "RAGOPS_LLM_PROVIDER" in merged_config:
-                lines.append(f"RAGOPS_LLM_PROVIDER={merged_config['RAGOPS_LLM_PROVIDER']}")
-                lines.append("")
+                for key, value in self.config.items():
+                    lines.append(f"{key}={value}")
 
-            # Then add provider-specific settings
-            provider_keys = {
-                "vertex": ["RAGOPS_VERTEX_CREDENTIALS"],
-                "openai": [
-                    "RAGOPS_OPENAI_API_KEY",
-                    "RAGOPS_OPENAI_BASE_URL",
-                    "RAGOPS_LLM_MODEL",
-                    "RAGOPS_OPENAI_EMBEDDINGS_MODEL",
-                ],
-                "azure_openai": [
-                    "RAGOPS_AZURE_OPENAI_API_KEY",
-                    "RAGOPS_AZURE_OPENAI_ENDPOINT",
-                    "RAGOPS_AZURE_OPENAI_API_VERSION",
-                    "RAGOPS_AZURE_OPENAI_DEPLOYMENT",
-                    "RAGOPS_AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT",
-                ],
-                "anthropic": ["RAGOPS_ANTHROPIC_API_KEY"],
-                "ollama": [
-                    "RAGOPS_OPENAI_API_KEY",
-                    "RAGOPS_OPENAI_BASE_URL",
-                    "RAGOPS_LLM_MODEL",
-                    "RAGOPS_OPENAI_EMBEDDINGS_MODEL",
-                ],
-                "openrouter": [
-                    "RAGOPS_OPENAI_API_KEY",
-                    "RAGOPS_OPENAI_BASE_URL",
-                    "RAGOPS_LLM_MODEL",
-                    "RAGOPS_OPENAI_EMBEDDINGS_MODEL",
-                ],
-            }
-
-            # Add keys grouped by provider
-            added_keys = {"RAGOPS_LLM_PROVIDER"}
-            for provider, keys in provider_keys.items():
-                provider_keys_found = [k for k in keys if k in merged_config]
-                if provider_keys_found:
-                    lines.append(f"# {provider.upper()} settings")
-                    for key in provider_keys_found:
-                        lines.append(f"{key}={merged_config[key]}")
-                        added_keys.add(key)
+                if lines and lines[-1] != "":
                     lines.append("")
 
-            # Add any remaining keys not in provider groups
-            other_keys = [k for k in merged_config.keys() if k not in added_keys]
-            if other_keys:
-                lines.append("# Other settings")
-                for key in sorted(other_keys):
-                    lines.append(f"{key}={merged_config[key]}")
-                lines.append("")
-
-            self.env_path.write_text("\n".join(lines))
-
-            if existing_config:
-                console.print(f"✓ Configuration updated in: [green]{self.env_path}[/green]\n")
-            else:
+                self.env_path.write_text("\n".join(lines))
                 console.print(f"✓ Configuration saved to: [green]{self.env_path}[/green]\n")
+                return True
+
+            # Existing file: update only changed values
+            existing_text = self.env_path.read_text(encoding="utf-8")
+            existing_lines = existing_text.splitlines()
+
+            updates = {k: v for k, v in self.config.items() if v is not None}
+            remaining_updates = dict(updates)
+            updated_lines: list[str] = []
+
+            for line in existing_lines:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#") or "=" not in line:
+                    updated_lines.append(line)
+                    continue
+
+                key = stripped.split("=", 1)[0].strip()
+                if key in remaining_updates:
+                    updated_lines.append(f"{key}={remaining_updates.pop(key)}")
+                else:
+                    updated_lines.append(line)
+
+            if remaining_updates:
+                if updated_lines and updated_lines[-1].strip():
+                    updated_lines.append("")
+                for key, value in remaining_updates.items():
+                    updated_lines.append(f"{key}={value}")
+
+            updated_content = "\n".join(updated_lines)
+            if not updated_content.endswith("\n"):
+                updated_content += "\n"
+
+            self.env_path.write_text(updated_content, encoding="utf-8")
+            console.print(f"✓ Configuration updated in: [green]{self.env_path}[/green]\n")
             return True
         except PermissionError:
             console.print(f"[red]✗ Permission denied:[/red] Cannot write to {self.env_path}\n")

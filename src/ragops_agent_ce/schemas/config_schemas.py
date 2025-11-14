@@ -21,6 +21,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import model_validator
 
 # ============================================================================
 # Enums
@@ -48,6 +49,7 @@ class EmbedderType(StrEnum):
     OPENAI = auto()
     VERTEX = auto()
     AZURE_OPENAI = auto()
+    OLLAMA = auto()
 
 
 class GenerationModelType(StrEnum):
@@ -104,10 +106,9 @@ MODEL_ENV_MAPPING = """
             - RAGOPS_CLAUDE_API_KEY
         for vertex
             - RAGOPS_VERTEX_CREDENTIALS_JSON
-            or
-            - RAGOPS_VERTEX_PROJECT_ID
-            - RAGOPS_VERTEX_LOCATION
-            - RAGOPS_VERTEX_API_KEY   
+        for ollama
+            - RAGOPS_OLLAMA_BASE_URL
+            - RAGOPS_OLLAMA_EMBEDDINGS_MODEL (for embeddings)
 """
 
 GENERATION_MODEL_TYPE_DESCRIPTION = f"""
@@ -131,7 +132,7 @@ EMBEDDER_TYPE_DESCRIPTION = f"""
 class Embedder(BaseModel):
     """Embedder configuration."""
 
-    embedder_type: str = Field(default=..., description=EMBEDDER_TYPE_DESCRIPTION)
+    embedder_type: EmbedderType = Field(description=EMBEDDER_TYPE_DESCRIPTION)
     model_name: str | None = Field(
         default=None,
         description=(
@@ -139,9 +140,22 @@ class Embedder(BaseModel):
             "For OpenAI: text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002. "
             "For Vertex: uses default model. "
             "For Azure OpenAI: deployment name or text-embedding-ada-002. "
+            "For Ollama: embeddinggemma, qwen3-embedding, all-minilm"
             "If not specified, uses provider defaults."
         ),
     )
+
+    @model_validator(mode="after")
+    def validate_model_name(self) -> "Embedder":
+        if (
+            self.embedder_type in (EmbedderType.OLLAMA, EmbedderType.AZURE_OPENAI)
+            and not self.model_name
+        ):
+            raise ValueError(
+                f"model_name is required for {self.embedder_type} provider"
+                f"Model must be deployed in {self.embedder_type}"
+            )
+        return self
 
 
 SPLITTER_DESCRIPTION = """

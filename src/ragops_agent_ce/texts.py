@@ -29,13 +29,13 @@ PROVIDER_STATUS_SETUP_REQUIRED = "[yellow][Setup Required][/yellow]"
 PROVIDER_CURRENT = "[bold cyan]← Current[/bold cyan]"
 
 PROVIDER_NOT_CONFIGURED = (
-    "[bold yellow]⚠ Provider not configured[/bold yellow]\n" "Credentials required for {provider}\n"
+    "[bold yellow]⚠ Provider not configured[/bold yellow]\nCredentials required for {provider}\n"
 )
 
 PROVIDER_CONFIGURE_PROMPT = "Configure credentials now?"
 
 PROVIDER_SELECTION_CANCELLED = (
-    "[bold yellow]Provider selection cancelled. " "Credentials required.[/bold yellow]"
+    "[bold yellow]Provider selection cancelled. Credentials required.[/bold yellow]"
 )
 
 PROVIDER_UPDATED = "[bold cyan]Provider updated:[/bold cyan] [yellow]{provider}[/yellow]"
@@ -74,7 +74,7 @@ MODEL_UPDATED = "[bold cyan]Model updated:[/bold cyan] [yellow]{model}[/yellow]"
 MODEL_SELECTED = "[bold cyan]Model selected:[/bold cyan] [yellow]{model}[/yellow]"
 
 MODEL_NOT_AVAILABLE = (
-    "[bold red]Error:[/bold red] {error}\n" "[yellow]Please select a different model.[/yellow]"
+    "[bold red]Error:[/bold red] {error}\n[yellow]Please select a different model.[/yellow]"
 )
 
 MODEL_NOT_AVAILABLE_FRIENDLY = (

@@ -31,7 +31,7 @@ class ChunkDocumentsArgs(BaseModel):
     params: ChunkerConfig
     incremental: bool = Field(
         default=True,
-        description=("If True, only process new/modified files. " "If False, reprocess all files."),
+        description="If True, only process new/modified files. If False, reprocess all files.",
     )
 
 

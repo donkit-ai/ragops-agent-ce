@@ -115,51 +115,80 @@ class MCPClient:
             env=self._env,
         )
         client = Client(transport)
-        async with client:
-            tools_resp = await client.list_tools()
-            tools = []
-            for t in tools_resp:
-                # FastMCP returns Tool objects with name, description, and inputSchema (dict)
-                schema: dict[str, Any] = {
-                    "type": "object",
-                    "properties": {},
-                    "additionalProperties": True,
-                }
-                # Access inputSchema attribute (note: lowercase 's' in input_schema or inputSchema)
-                raw_schema = getattr(t, "inputSchema", None) or getattr(t, "input_schema", None)
-                if raw_schema and isinstance(raw_schema, dict):
-                    try:
-                        # FastMCP wraps Pydantic models in {"args": <model>}
-                        # Unwrap by following $ref to get actual model schema
-                        if "properties" in raw_schema:
-                            if "args" in raw_schema["properties"] and "$defs" in raw_schema:
-                                # Get the ref target
-                                args_ref = raw_schema["properties"]["args"].get("$ref")
-                                if args_ref and args_ref.startswith("#/$defs/"):
-                                    def_name = args_ref.split("/")[-1]
-                                    if def_name in raw_schema["$defs"]:
-                                        # Use the unwrapped model schema
-                                        schema = raw_schema["$defs"][def_name].copy()
-                                        # Preserve $defs for nested refs
-                                        if "$defs" in raw_schema:
-                                            schema["$defs"] = raw_schema["$defs"]
-                            else:
-                                # No args wrapper, use as is
-                                schema = raw_schema
-                    except Exception as e:
-                        logger.warning(f"Failed to parse schema for tool {t.name}: {e}")
-                tools.append(
-                    {
-                        "name": t.name,
-                        "description": t.description or "",
-                        "parameters": schema,
+        try:
+            async with client:
+                tools_resp = await client.list_tools()
+                tools = []
+                for t in tools_resp:
+                    # FastMCP returns Tool objects with name, description, and inputSchema (dict)
+                    schema: dict[str, Any] = {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": True,
                     }
-                )
-            return tools
+                    # Access inputSchema attribute
+                    # (note: lowercase 's' in input_schema or inputSchema)
+                    raw_schema = getattr(t, "inputSchema", None) or getattr(t, "input_schema", None)
+                    if raw_schema and isinstance(raw_schema, dict):
+                        try:
+                            # FastMCP wraps Pydantic models in {"args": <model>}
+                            # Unwrap by following $ref to get actual model schema
+                            if "properties" in raw_schema:
+                                if "args" in raw_schema["properties"] and "$defs" in raw_schema:
+                                    # Get the ref target
+                                    args_ref = raw_schema["properties"]["args"].get("$ref")
+                                    if args_ref and args_ref.startswith("#/$defs/"):
+                                        def_name = args_ref.split("/")[-1]
+                                        if def_name in raw_schema["$defs"]:
+                                            # Use the unwrapped model schema
+                                            schema = raw_schema["$defs"][def_name].copy()
+                                            # Preserve $defs for nested refs
+                                            if "$defs" in raw_schema:
+                                                schema["$defs"] = raw_schema["$defs"]
+                                else:
+                                    # No args wrapper, use as is
+                                    schema = raw_schema
+                        except Exception as e:
+                            logger.warning(f"Failed to parse schema for tool {t.name}: {e}")
+                    tools.append(
+                        {
+                            "name": t.name,
+                            "description": t.description or "",
+                            "parameters": schema,
+                        }
+                    )
+                return tools
+        except asyncio.CancelledError:
+            logger.warning("Tool listing was cancelled")
+            raise
+        finally:
+            # Ensure transport cleanup even on interruption
+            if hasattr(transport, "_process") and transport._process:
+                try:
+                    transport._process.terminate()
+                    await asyncio.sleep(0.1)  # Give it time to terminate
+                    if transport._process.poll() is None:
+                        transport._process.kill()
+                except Exception as e:
+                    logger.debug(f"Error during transport cleanup: {e}")
 
     def list_tools(self) -> list[dict]:
         """Synchronously list available tools."""
-        return asyncio.run(asyncio.wait_for(self._alist_tools(), timeout=self.timeout))
+        try:
+            return asyncio.run(asyncio.wait_for(self._alist_tools(), timeout=self.timeout))
+        except KeyboardInterrupt:
+            logger.warning("Tool listing interrupted by user")
+            # Don't re-raise - return empty list to allow agent to continue
+            return []
+        finally:
+            # Ensure any remaining event loop cleanup happens
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.stop()
+            except RuntimeError:
+                # No event loop available, which is fine
+                pass
 
     async def _acall_tool(self, name: str, arguments: dict[str, Any]) -> str:
         """Call a tool on the MCP server."""
@@ -167,33 +196,66 @@ class MCPClient:
         # Create StdioTransport with explicit command, args, and environment
         transport = StdioTransport(command=self.command, args=self.args, env=self._env)
         client = Client(transport, progress_handler=self.__progress_handler)
-        async with client:
-            # FastMCP wraps Pydantic models in {"args": <model>}, so wrap arguments
-            wrapped_args = {"args": arguments} if arguments else None
-            logger.debug(f"Wrapped arguments for {name}: {wrapped_args}")
-            result = await client.call_tool(name, wrapped_args)
-            # FastMCP returns ToolResult with content and optional data
-            # Try to extract text content first
-            if hasattr(result, "content") and result.content:
-                texts: list[str] = []
-                for content_item in result.content:
-                    if hasattr(content_item, "text"):
-                        texts.append(content_item.text)
-                if texts:
-                    return "\n".join(texts)
-            # Fall back to structured data if available
-            if hasattr(result, "data") and result.data is not None:
-                if isinstance(result.data, str):
-                    return result.data
-                return json.dumps(result.data)
-            # Last resort: stringify the whole result
-            return str(result)
+        try:
+            async with client:
+                # FastMCP wraps Pydantic models in {"args": <model>}, so wrap arguments
+                wrapped_args = {"args": arguments} if arguments else None
+                logger.debug(f"Wrapped arguments for {name}: {wrapped_args}")
+                result = await client.call_tool(name, wrapped_args)
+                # FastMCP returns ToolResult with content and optional data
+                # Try to extract text content first
+                if hasattr(result, "content") and result.content:
+                    texts: list[str] = []
+                    for content_item in result.content:
+                        if hasattr(content_item, "text"):
+                            texts.append(content_item.text)
+                    if texts:
+                        return "\n".join(texts)
+                # Fall back to structured data if available
+                if hasattr(result, "data") and result.data is not None:
+                    if isinstance(result.data, str):
+                        return result.data
+                    return json.dumps(result.data)
+                # Last resort: stringify the whole result
+                return str(result)
+        except asyncio.CancelledError:
+            # Handle cancellation gracefully
+            logger.warning(f"Tool {name} execution was cancelled")
+            raise
+        except KeyboardInterrupt:
+            # Convert KeyboardInterrupt to CancelledError for proper async handling
+            logger.warning(f"Tool {name} execution interrupted by user")
+            raise asyncio.CancelledError(f"Tool {name} execution cancelled by user")
+        finally:
+            # Ensure transport cleanup even on interruption
+            if hasattr(transport, "_process") and transport._process:
+                try:
+                    transport._process.terminate()
+                    await asyncio.sleep(0.1)  # Give it time to terminate
+                    if transport._process.poll() is None:
+                        transport._process.kill()
+                except Exception as e:
+                    logger.debug(f"Error during transport cleanup: {e}")
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
         """Synchronously call a tool."""
-        result = asyncio.run(
-            asyncio.wait_for(self._acall_tool(name, arguments), timeout=self.timeout)
-        )
-        if not isinstance(result, str):
-            return json.dumps(result)
-        return result
+        try:
+            result = asyncio.run(
+                asyncio.wait_for(self._acall_tool(name, arguments), timeout=self.timeout)
+            )
+            if not isinstance(result, str):
+                return json.dumps(result)
+            return result
+        except KeyboardInterrupt:
+            logger.warning(f"Tool {name} execution interrupted by user")
+            # Don't re-raise - let it be handled as cancellation
+            raise asyncio.CancelledError(f"Tool {name} execution cancelled by user")
+        finally:
+            # Ensure any remaining event loop cleanup happens
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.stop()
+            except RuntimeError:
+                # No event loop available, which is fine
+                pass
