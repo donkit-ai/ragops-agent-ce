@@ -1,5 +1,7 @@
 import warnings
 
+from loguru import logger
+
 # Suppress all warnings immediately, before any other imports
 warnings.filterwarnings("ignore")
 # Suppress warnings from importlib bootstrap (SWIG-related)
@@ -12,6 +14,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
+from donkit.embeddings import get_ollama_embeddings
 from donkit.embeddings import get_vertexai_embeddings
 from donkit.vectorstore_loader import create_vectorstore_loader
 from fastmcp import Context
@@ -58,6 +61,12 @@ def create_embedder(embedder_type: str) -> Embeddings:
             )
         return api_key, endpoint, api_version, deployment
 
+    def __check_ollama():
+        api_key = os.getenv("RAGOPS_OLLAMA_API_KEY", "ollama")
+        base_url = os.getenv("RAGOPS_OLLAMA_BASE_URL", "http://localhost:11434").replace("/v1", "")
+        model = os.getenv("RAGOPS_OLLAMA_EMBEDDINGS_MODEL", "nomic-embed-text")
+        return api_key, base_url, model
+
     if embedder_type == "openai":
         api_key, base_url, model = __check_openai()
         return OpenAIEmbeddings(
@@ -80,13 +89,22 @@ def create_embedder(embedder_type: str) -> Embeddings:
             if deployment and "embed" in deployment
             else "text-embedding-ada-002",
         )
+    elif embedder_type == "ollama":
+        api_key, base_url, model = __check_ollama()
+        logger.debug(f"Using Ollama API key: {api_key}, with base URL: {base_url}, model: {model}")
+        return get_ollama_embeddings(
+            host=base_url,
+            model=model,
+        )
     else:
         raise ValueError(f"Unknown embedder type: {embedder_type}")
 
 
 class VectorstoreParams(BaseModel):
     backend: Literal["qdrant", "chroma", "milvus"] = Field(default="qdrant")
-    embedder_type: str = Field(default="vertex")
+    embedder_type: str = Field(
+        description="Embedder provider (openai, vertex, azure_openai, ollama)"
+    )
     collection_name: str = Field(description="Use collection name from rag config")
     database_uri: str = Field(
         default="http://localhost:6333", description="local vectorstore database URI outside docker"
@@ -154,10 +172,10 @@ async def vectorstore_load(
         dir_path = Path(chunks_path)
         json_files = sorted([f for f in dir_path.iterdir() if f.is_file() and f.suffix == ".json"])
     else:
-        return f"Error: path not found: {chunks_path}"
+        raise ValueError(f"Error: path not found: {chunks_path}")
 
     if not json_files:
-        return f"Error: no JSON files found in {chunks_path}"
+        raise ValueError(f"Error: no JSON files found in {chunks_path}")
 
     try:
         embeddings = create_embedder(params.embedder_type)
@@ -168,9 +186,9 @@ async def vectorstore_load(
             database_uri=params.database_uri,
         )
     except ValueError as e:
-        return f"Error initializing vectorstore: {e}"
+        raise ValueError(f"Error initializing vectorstore: {e}")
     except Exception as e:
-        return f"Unexpected error during initialization: {e}"
+        raise ValueError(f"Unexpected error during initialization: {e}")
 
     # Load files one by one for detailed tracking
     total_chunks_loaded = 0

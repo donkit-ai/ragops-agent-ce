@@ -225,12 +225,12 @@ def select_model_at_startup(
                         has_creds = check_provider_credentials(selected_provider, env_path)
                         if not has_creds:
                             console.print(
-                                "\n[red]Configuration saved but credentials check " "failed.[/red]"
+                                "\n[red]Configuration saved but credentials check failed.[/red]"
                             )
                             retry_count += 1
                             if retry_count >= max_retries:
                                 console.print(
-                                    f"[red]Maximum retry attempts ({max_retries}) " "reached.[/red]"
+                                    f"[red]Maximum retry attempts ({max_retries}) reached.[/red]"
                                 )
                                 return None
                             console.print("[yellow]Please try again.[/yellow]\n")
@@ -240,7 +240,7 @@ def select_model_at_startup(
                         retry_count += 1
                         if retry_count >= max_retries:
                             console.print(
-                                f"[red]Maximum retry attempts ({max_retries}) " "reached.[/red]"
+                                f"[red]Maximum retry attempts ({max_retries}) reached.[/red]"
                             )
                             return None
                         console.print("[yellow]Please try again.[/yellow]\n")
@@ -249,9 +249,7 @@ def select_model_at_startup(
                     console.print("\n[red]Configuration cancelled or failed.[/red]")
                     retry_count += 1
                     if retry_count >= max_retries:
-                        console.print(
-                            f"[red]Maximum retry attempts ({max_retries}) " "reached.[/red]"
-                        )
+                        console.print(f"[red]Maximum retry attempts ({max_retries}) reached.[/red]")
                         return None
                     console.print("[yellow]Please try again.[/yellow]\n")
                     continue
@@ -261,7 +259,7 @@ def select_model_at_startup(
                 retry_count += 1
                 if retry_count >= max_retries:
                     console.print(
-                        f"[yellow]Maximum retry attempts ({max_retries}) " "reached.[/yellow]"
+                        f"[yellow]Maximum retry attempts ({max_retries}) reached.[/yellow]"
                     )
                     return None
                 continue

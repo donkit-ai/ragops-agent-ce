@@ -208,6 +208,10 @@ def generate_env_file(
     azure_openai_deployment: str | None,
     azure_openai_embeddings_deployment: str | None,
     vertex_credentials_json: str | None,
+    ollama_base_url: str | None,
+    ollama_api_key: str | None,
+    ollama_chat_model: str | None,
+    ollama_embedding_model: str | None,
     log_level: str | None,
 ) -> str:
     """Generate .env file content from RagConfig."""
@@ -267,6 +271,19 @@ def generate_env_file(
         lines.append(f"RAGOPS_VERTEX_CREDENTIALS_JSON={encoded}")
     else:
         lines.append("RAGOPS_VERTEX_CREDENTIALS_JSON=")
+    lines.append("")
+
+    # Ollama
+    lines.append("# Ollama (Local LLM)")
+    ollama_uri = (
+        ollama_base_url.replace("localhost", "host.docker.internal")
+        if ollama_base_url
+        else "http://host.docker.internal:11434/v1"
+    )
+    lines.append(f"OLLAMA_BASE_URL={ollama_uri}")
+    lines.append(f"OLLAMA_API_KEY={ollama_api_key or 'ollama'}")
+    lines.append(f"OLLAMA_CHAT_MODEL={ollama_chat_model or 'mistral'}")
+    lines.append(f"OLLAMA_EMBEDDING_MODEL={ollama_embedding_model or 'nomic-embed-text'}")
     lines.append("")
 
     lines.append("# -----------------------------------------------------------------------------")
@@ -438,6 +455,10 @@ async def init_project_compose(args: InitProjectComposeArgs) -> str:
         azure_openai_embeddings_deployment=os.getenv("RAGOPS_AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT"),
         azure_openai_api_version=os.getenv("RAGOPS_AZURE_OPENAI_API_VERSION"),
         vertex_credentials_json=vertex_credentials_json,
+        ollama_base_url=os.getenv("RAGOPS_OLLAMA_BASE_URL"),
+        ollama_api_key=os.getenv("RAGOPS_OLLAMA_API_KEY"),
+        ollama_chat_model=os.getenv("RAGOPS_OLLAMA_CHAT_MODEL"),
+        ollama_embedding_model=os.getenv("RAGOPS_OLLAMA_EMBEDDINGS_MODEL"),
         log_level=os.getenv("RAGOPS_LOG_LEVEL"),
     )
     env_file = compose_target / ".env"
@@ -654,7 +675,7 @@ async def start_service(args: StartServiceArgs) -> str:
                 if service == "qdrant" and "qdrant" in port_map:
                     port_mapping = port_map["qdrant"]
                     host_port = port_mapping.split(":")[0] if ":" in port_mapping else port_mapping
-                    ports = [port_mapping, f"{int(host_port)+1}:6334"]
+                    ports = [port_mapping, f"{int(host_port) + 1}:6334"]
                     url = f"http://localhost:{host_port}"
                 elif service == "chroma" and "chroma" in port_map:
                     port_mapping = port_map["chroma"]
@@ -664,7 +685,7 @@ async def start_service(args: StartServiceArgs) -> str:
                 elif service == "milvus" and "milvus" in port_map:
                     port_mapping = port_map["milvus"]
                     host_port = port_mapping.split(":")[0] if ":" in port_mapping else port_mapping
-                    ports = [port_mapping, f"{int(host_port)+1}:9091"]
+                    ports = [port_mapping, f"{int(host_port) + 1}:9091"]
                     url = f"http://localhost:{host_port}"
                 elif service == "rag-service" and "rag-service" in port_map:
                     port_mapping = port_map["rag-service"]
