@@ -109,6 +109,22 @@ def main(
             # Provider provided via CLI, save it to KV database as latest
             save_model_selection(provider, model)
 
+        # Ensure model is never None before entering REPL
+        if model is None:
+            # Try to get a default from provider config or fallback
+            default_models = {
+                "openai": "gpt-4o-mini",
+                "azure_openai": "gpt-4o-mini",
+                "vertex": "gemini-2.5-flash",
+                "ollama": "llama3.1",
+                "openrouter": "openai/gpt-4o-mini",
+                "donkit": "gpt5",
+                "anthropic": "claude-3-5-sonnet-20241022",
+                "mock": "gpt-4o-mini"
+            }
+            model = default_models.get((provider or "").lower(), "gpt-4o-mini")
+            console.print(f"[yellow]No model selected. Using default: [cyan]{model}[/cyan][/yellow]")
+
         asyncio.run(
             _astart_repl(
                 system=system or VERTEX_SYSTEM_PROMPT

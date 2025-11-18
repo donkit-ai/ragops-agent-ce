@@ -48,6 +48,10 @@ PROVIDERS = {
         "display": "OpenRouter",
         "description": "Access 100+ models via OpenRouter API",
     },
+    "donkit": {
+        "display": "Donkit",
+        "description": "Donkit default model",
+    },
 }
 
 
@@ -337,6 +341,10 @@ def select_model_at_startup(
                     "claude-3-opus-20240229",
                     "claude-3-sonnet-20240229",
                     "claude-3-haiku-20240307",
+                ],
+                "donkit": [
+                    "gpt5",
+
                 ],
             }
             models = common_models.get(selected_provider, [])

@@ -71,4 +71,10 @@ def check_provider_credentials(provider: str, env_path: Path | None = None) -> b
         has_api_key = bool(config.get("RAGOPS_OPENAI_API_KEY"))
         return has_api_key and is_openrouter_url
 
+    elif provider == "donkit":
+        base_url = config.get("DONKIT_BASE_URL", "")
+        is_donkit_url = "donkit.ai" in base_url
+        has_api_key = bool(config.get("DONKIT_API_KEY"))
+        return has_api_key and is_donkit_url
+
     return False

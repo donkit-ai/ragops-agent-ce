@@ -1,22 +1,20 @@
 from __future__ import annotations
 
-import importlib
 import json
 
+from .base import LLMProvider
+from .providers.anthropic import AnthropicProvider
+from .providers.azure_openai import AzureOpenAIProvider
+from .providers.donkit import DonkitProvider
+from .providers.mock import MockProvider
+from .providers.openai import OpenAIProvider
+from .providers.vertex import VertexProvider
 from ..config import Settings
 from ..config import load_settings
-from .base import LLMProvider
 
-PROVIDER_PATHS: dict[str, tuple[str, str]] = {
-    "openai": ("ragops_agent_ce.llm.providers.openai", "OpenAIProvider"),
-    "azure_openai": ("ragops_agent_ce.llm.providers.azure_openai", "AzureOpenAIProvider"),
-    "anthropic": ("ragops_agent_ce.llm.providers.anthropic", "AnthropicProvider"),
-    "ollama": ("ragops_agent_ce.llm.providers.openai", "OpenAIProvider"),
-    "openrouter": ("ragops_agent_ce.llm.providers.openai", "OpenAIProvider"),
-    "mock": ("ragops_agent_ce.llm.providers.mock", "MockProvider"),
-    "vertex": ("ragops_agent_ce.llm.providers.vertex", "VertexProvider"),
-    "donkit": ("ragops_agent_ce.llm.providers.donkit", "DonkitProvider"),
-}
+PROVIDERS_TYPES = [OpenAIProvider, AzureOpenAIProvider, AnthropicProvider, MockProvider, VertexProvider, DonkitProvider]
+
+PROVIDER_TYPES: dict[str, type[LLMProvider]] = {p.name: p for p in PROVIDERS_TYPES}
 
 
 def __get_vertex_credentials():
@@ -52,12 +50,9 @@ def __get_vertex_credentials():
 def get_provider(settings: Settings | None = None, llm_provider: str | None = None) -> LLMProvider:
     cfg = settings or load_settings()
     provider_key = (llm_provider or cfg.llm_provider or "mock").lower()
-    path = PROVIDER_PATHS.get(provider_key)
-    if not path:
+    cls = PROVIDER_TYPES.get(provider_key)
+    if not cls:
         raise ValueError(f"Unknown LLM provider: {provider_key}")
-    module_name, class_name = path
-    module = importlib.import_module(module_name)
-    cls: type[LLMProvider] = getattr(module, class_name)
 
     if provider_key == "vertex":
         credentials_data = __get_vertex_credentials()

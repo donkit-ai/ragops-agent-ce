@@ -120,6 +120,12 @@ class SetupWizard:
                 "description": "Access 100+ models via OpenRouter API",
                 "available": True,
             },
+            "6": {
+                "name": "donkit",
+                "display": "Donkit",
+                "description": "Donkit default models via Donkit API",
+                "available": True,
+            },
         }
 
         # Build list of available choices for interactive selection
@@ -159,6 +165,8 @@ class SetupWizard:
             return self._configure_ollama()
         elif provider == "openrouter":
             return self._configure_openrouter()
+        elif provider == "donkit":
+            return self._configure_donkit()
 
         return False
 
@@ -368,6 +376,25 @@ class SetupWizard:
         console.print(f"✓ Embedding model: [green]{embedding_model}[/green]")
 
         console.print("✓ OpenRouter configured\n")
+        return True
+
+    def _configure_donkit(self) -> bool:
+        console.print("[dim]You need credentials from Donkit Ragops service.[/dim]\n")
+
+        api_token = Prompt.ask("Enter Donkit X-API-TOKEN key", password=True)
+
+        if not api_token:
+            console.print("[red]✗ API token is required[/red]")
+            retry = Confirm.ask("Try again?", default=True)
+            if retry:
+                return self._configure_donkit()
+            return False
+
+        self.config["DONKIT_API_KEY"] = api_token
+        self.config["DONKIT_BASE_URL"] = "https://platform.donkit.ai/"
+        console.print("✓ OpenRouter URL: [green]https://platform.donkit.ai/[/green]")
+
+        console.print("✓ Donkit Cloud configured\n")
         return True
 
     def _configure_optional_settings(self) -> None:
