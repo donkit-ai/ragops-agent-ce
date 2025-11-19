@@ -24,7 +24,9 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install poetry
-          poetry install
+          poetry config virtualenvs.create false
+          poetry config installer.no-binary :all:
+          poetry install --no-cache
 
       - name: Run ruff check
         run: poetry run ruff check .
