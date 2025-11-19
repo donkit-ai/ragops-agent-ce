@@ -222,16 +222,6 @@ class SetupWizard:
 
         self.config["RAGOPS_OPENAI_API_KEY"] = api_key
 
-        # Optional model name
-        if use_case == "chat":
-            console.print()
-            use_custom_model = interactive_confirm("Specify model name?", default=False)
-
-            if use_custom_model:
-                model = Prompt.ask("Enter model name", default="gpt-5")
-                self.config["RAGOPS_LLM_MODEL"] = model
-                console.print(f"✓ Model: [green]{model}[/green]")
-
         # Optional embedding model
         console.print()
         use_embedding_model = interactive_confirm("Specify embedding model?", default=False)
@@ -277,20 +267,28 @@ class SetupWizard:
             retry = Confirm.ask("Continue anyway?", default=False)
             if not retry:
                 return self._configure_anthropic()
+
+        self.config["RAGOPS_ANTHROPIC_API_KEY"] = api_key
+        console.print("✓ API key configured\n")
+
+        # Anthropic doesn't support embeddings, configure separate provider
         console.print(
-            "Anthropic claude does not support embeddings,"
-            "please configure a separate provider for embeddings"
+            "[yellow]Anthropic claude does not support embeddings.[/yellow]\n"
+            "[dim]Please configure a separate provider for embeddings:[/dim]\n"
         )
         embeddings_provider = self._choose_provider(use_case="embeddings")
-        configured = self.configure_provider(embeddings_provider)
+        if not embeddings_provider:
+            return False
+
+        # Configure embeddings provider with use_case="embeddings" to avoid recursion
+        configured = self.configure_provider(embeddings_provider, use_case="embeddings")
         if not configured:
             retry = Confirm.ask("Try again?", default=True)
             if retry:
-                return self.configure_provider(embeddings_provider)
+                return self.configure_provider(embeddings_provider, use_case="embeddings")
             else:
                 return False
-        self.config["RAGOPS_ANTHROPIC_API_KEY"] = api_key
-        console.print("✓ API key configured\n")
+
         return True
 
     def _configure_azure_openai(self, use_case: str = "chat") -> bool:
@@ -348,22 +346,6 @@ class SetupWizard:
         self.config["RAGOPS_OLLAMA_BASE_URL"] = base_url
         console.print(f"✓ Ollama URL: [green]{base_url}[/green]")
 
-        # Chat model name
-        console.print()
-        if use_case == "chat":
-            chat_model = Prompt.ask("Enter chat model name", default="gpt-oss:20b")
-            self.config["RAGOPS_LLM_MODEL"] = chat_model
-            self.config["RAGOPS_OLLAMA_CHAT_MODEL"] = chat_model
-            console.print(f"✓ Chat model: [green]{chat_model}[/green]")
-            console.print()
-            vision_model = Prompt.ask(
-                "Ensure that the chat model is supports VISION, "
-                "otherwise specify a vision model (for image analysis)",
-                default=chat_model,
-            )
-            self.config["RAGOPS_OLLAMA_VISION_MODEL"] = vision_model
-            console.print(f"✓ Vision model: [green]{vision_model}[/green]")
-
         # Embedding model name
         console.print()
         embedding_model = Prompt.ask("Enter embedding model name", default="embeddinggemma")
@@ -389,26 +371,26 @@ class SetupWizard:
         # OpenRouter uses OpenAI-compatible API
         self.config["RAGOPS_OPENAI_API_KEY"] = api_key
         self.config["RAGOPS_OPENAI_BASE_URL"] = "https://openrouter.ai/api/v1"
-        console.print("✓ OpenRouter URL: [green]https://openrouter.ai/api/v1[/green]")
+        console.print("✓ OpenRouter URL: [green]https://openrouter.ai/api/v1[/green]\n")
 
-        # Chat model name
-        console.print()
-        chat_model = Prompt.ask("Enter chat model name", default="openai/gpt-4o-mini")
-        self.config["RAGOPS_LLM_MODEL"] = chat_model
-        console.print(f"✓ Chat model: [green]{chat_model}[/green]")
+        # OpenRouter doesn't support embeddings, configure separate provider
         console.print(
-            "Openrouter does not support embeddings, "
-            "please configure a separate provider for embeddings"
+            "[yellow]OpenRouter does not support embeddings.[/yellow]\n"
+            "[dim]Please configure a separate provider for embeddings:[/dim]\n"
         )
         embeddings_provider = self._choose_provider(use_case="embeddings")
+        if not embeddings_provider:
+            return False
+
+        # Configure embeddings provider with use_case="embeddings" to avoid asking twice
         configured = self.configure_provider(embeddings_provider, use_case="embeddings")
         if not configured:
             retry = Confirm.ask("Try again?", default=True)
             if retry:
-                return self.configure_provider(embeddings_provider)
+                return self.configure_provider(embeddings_provider, use_case="embeddings")
             else:
                 return False
-        # Embedding model name
+
         console.print("✓ OpenRouter configured\n")
         return True
 

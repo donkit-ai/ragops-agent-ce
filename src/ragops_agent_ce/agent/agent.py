@@ -27,8 +27,10 @@ from .tools import tool_grep
 from .tools import tool_interactive_user_choice
 from .tools import tool_interactive_user_confirm
 from .tools import tool_list_directory
+from .tools import tool_quick_start_rag_config
 from .tools import tool_read_file
 from .tools import tool_time_now
+from .tools import tool_update_rag_config_field
 
 
 class EventType(StrEnum):
@@ -58,6 +60,8 @@ def default_tools() -> list[AgentTool]:
         tool_grep(),
         tool_interactive_user_choice(),
         tool_interactive_user_confirm(),
+        tool_quick_start_rag_config(),
+        tool_update_rag_config_field(),
         tool_create_project(),
         tool_get_project(),
         tool_list_projects(),
