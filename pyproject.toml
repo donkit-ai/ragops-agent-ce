@@ -31,7 +31,8 @@ langchain-openai = "^0.3.35"
 langchain-community = "^0.3.31"
 donkit-read-engine = "^0.2.3"
 fastmcp = "^2.13.0.2"
-protobuf = "6.33.0"
+protobuf = "==6.33.0"
+
 
 [tool.poetry.scripts]
 donkit-ragops-ce = "ragops_agent_ce.cli:app"
