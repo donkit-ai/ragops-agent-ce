@@ -22,7 +22,7 @@ from ragops_agent_ce.llm.types import Message
 from ragops_agent_ce.llm.types import ToolCall
 from ragops_agent_ce.llm.types import ToolFunctionCall
 
-from tests.conftest import BaseMockProvider
+from .conftest import BaseMockProvider
 
 # ============================================================================
 # Test-specific configurations
