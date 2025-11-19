@@ -17,9 +17,7 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
-
 from ragops_agent_ce.setup_wizard import SetupWizard
-
 
 # ============================================================================
 # Fixtures
@@ -324,7 +322,10 @@ def test_configure_provider_unknown(wizard_with_path: SetupWizard) -> None:
 @patch("ragops_agent_ce.setup_wizard.interactive_confirm")
 @patch("ragops_agent_ce.setup_wizard.Prompt.ask")
 def test_openai_key_format_warning(
-    mock_prompt: MagicMock, mock_confirm: MagicMock, mock_confirm_ask: MagicMock, wizard: SetupWizard
+    mock_prompt: MagicMock,
+    mock_confirm: MagicMock,
+    mock_confirm_ask: MagicMock,
+    wizard: SetupWizard,
 ) -> None:
     """Test OpenAI configuration accepts non-standard keys."""
     mock_prompt.return_value = "custom-key-format"
