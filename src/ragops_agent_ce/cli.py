@@ -302,27 +302,37 @@ async def _astart_repl(
             render_helper.render_current_screen()
 
             if new_provider.prompt_model_selection and provider:
-                models = get_available_models(prov, provider)
+                # First ask if user wants to select a different model
+                current_model_display = agent_settings.model or model or "default"
+                want_to_change_model = interactive_confirm(
+                    question=f"Current model: {current_model_display}. Select a different model?",
+                    default=False
+                )
 
-                if models:
-                    choices = format_model_choices(models, agent_settings.model or model)
-                    choices.append(texts.MODEL_SELECT_SKIP)
+                if want_to_change_model:
+                    models = get_available_models(prov, provider)
 
-                    title = texts.MODEL_SELECT_TITLE.format(provider=PROVIDERS[provider]["display"])
-                    selected_choice = interactive_select(choices, title=title)
+                    if models:
+                        choices = format_model_choices(models, agent_settings.model or model)
+                        choices.append(texts.MODEL_SELECT_SKIP)
 
-                    if selected_choice and selected_choice != texts.MODEL_SELECT_SKIP:
-                        new_model = selected_choice.split(" [")[0].strip()
-                        success, messages = validate_model_choice(
-                            prov, provider, new_model, agent_settings
-                        )
-                        transcript.extend(messages)
-                        if success:
-                            model = new_model
-                    elif selected_choice == texts.MODEL_SELECT_SKIP:
-                        transcript.append(texts.MODEL_USING_DEFAULT)
+                        title = texts.MODEL_SELECT_TITLE.format(provider=PROVIDERS[provider]["display"])
+                        selected_choice = interactive_select(choices, title=title)
+
+                        if selected_choice and selected_choice != texts.MODEL_SELECT_SKIP:
+                            new_model = selected_choice.split(" [")[0].strip()
+                            success, messages = validate_model_choice(
+                                prov, provider, new_model, agent_settings
+                            )
+                            transcript.extend(messages)
+                            if success:
+                                model = new_model
+                        elif selected_choice == texts.MODEL_SELECT_SKIP:
+                            transcript.append(texts.MODEL_USING_DEFAULT)
+                    else:
+                        transcript.append(texts.MODEL_NO_AVAILABLE)
                 else:
-                    transcript.append(texts.MODEL_NO_AVAILABLE)
+                    transcript.append(f"[dim]Keeping current model: {current_model_display}[/dim]")
 
             render_helper.render_current_screen()
             continue

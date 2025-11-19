@@ -25,7 +25,7 @@ from ragops_agent_ce.model_selector import PROVIDERS
 from ragops_agent_ce.model_selector import save_model_selection
 from ragops_agent_ce.schemas.agent_schemas import AgentSettings
 from ragops_agent_ce.setup_wizard import SetupWizard
-from ragops_agent_ce.utils import common_models
+from ragops_agent_ce.supported_models import SUPPORTED_MODELS
 
 
 def configure_provider_credentials(
@@ -72,22 +72,38 @@ def save_provider_config(config: dict[str, str], env_path: Path | None = None) -
 
 
 def get_available_models(prov: object, provider_key: str) -> list[str]:
-    """Collect available chat models for provider with fallback to common defaults."""
-    models: list[str] = []
+    """
+    Collect available chat models for provider.
+    
+    If SUPPORTED_MODELS has entries for this provider, return the intersection
+    of fetched models and supported models (filtering out unsupported ones).
+    
+    If fetched list is empty or fails, fallback to supported models.
+    If supported list is empty (e.g. Ollama), return all fetched models.
+    """
+    supported = SUPPORTED_MODELS.get(provider_key, [])
+    fetched_models: list[str] = []
 
     if prov is not None:
         try:
             if hasattr(prov, "list_chat_models"):
-                models = prov.list_chat_models()
+                fetched_models = prov.list_chat_models()
             elif hasattr(prov, "list_models"):
-                models = prov.list_models()
+                fetched_models = prov.list_models()
         except Exception as exc:
             logger.warning(f"Failed to list models for provider '{provider_key}': {exc}")
 
-    if not models:
-        models = common_models.get(provider_key, [])
+    if fetched_models:
+        if supported:
+            # Intersection: Keep supported models that exist in fetched list
+            # Use order from supported list
+            return [m for m in supported if m in fetched_models]
+        else:
+            # No whitelist -> return all
+            return fetched_models
 
-    return models
+    # Fallback to supported if fetch failed
+    return supported
 
 
 def format_model_choices(models: Iterable[str], current_model: str | None) -> list[str]:
