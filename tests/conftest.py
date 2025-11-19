@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 from unittest.mock import patch
 
 import pytest
+
 from ragops_agent_ce.llm.types import LLMResponse
 from ragops_agent_ce.llm.types import Message
 from ragops_agent_ce.llm.types import ToolCall
@@ -48,6 +49,7 @@ class BaseMockProvider:
             supports_tools_val: Whether provider supports tools (default: True)
             supports_streaming_val: Whether provider supports streaming (default: False)
         """
+        from ragops_agent_ce.llm.base import LLMProvider
 
         self.call_count = 0
         self.stream_call_count = 0
@@ -68,10 +70,10 @@ class BaseMockProvider:
         return self.supports_streaming_val
 
     def generate(
-        self,
-        messages: list[Any],
-        tools: list[Any] | None = None,
-        model: str | None = None,
+            self,
+            messages: list[Any],
+            tools: list[Any] | None = None,
+            model: str | None = None,
     ) -> Any:
         """Generate response based on configured responses."""
         self.call_count += 1
@@ -110,10 +112,10 @@ class BaseMockProvider:
         )
 
     def generate_stream(
-        self,
-        messages: list[Any],
-        tools: list[Any] | None = None,
-        model: str | None = None,
+            self,
+            messages: list[Any],
+            tools: list[Any] | None = None,
+            model: str | None = None,
     ) -> Any:
         """Stream responses based on configured responses."""
         self.stream_call_count += 1
