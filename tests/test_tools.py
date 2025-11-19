@@ -10,8 +10,6 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-
-from ragops_agent_ce.agent.tools import AgentTool
 from ragops_agent_ce.agent.tools import tool_db_get
 from ragops_agent_ce.agent.tools import tool_grep
 from ragops_agent_ce.agent.tools import tool_interactive_user_choice
@@ -23,7 +21,6 @@ from ragops_agent_ce.db import DB
 from ragops_agent_ce.db import close
 from ragops_agent_ce.db import kv_set
 from ragops_agent_ce.db import migrate
-
 
 # ============================================================================
 # Fixtures
@@ -269,11 +266,11 @@ def test_tool_grep_basic(temp_dir: Path) -> None:
 
     tool = tool_grep()
     result_str = tool.handler({"pattern": "hello", "path": str(temp_dir)})
-    
+
     # grep returns newline-separated JSON objects
     lines = result_str.strip().split("\n")
     matches = [json.loads(line) for line in lines if line]
-    
+
     # Should have matches for files with "hello" in name
     assert len(matches) >= 1
 
@@ -284,10 +281,10 @@ def test_tool_grep_no_matches(temp_dir: Path) -> None:
 
     tool = tool_grep()
     result_str = tool.handler({"pattern": "xyz", "path": str(temp_dir)})
-    
+
     lines = result_str.strip().split("\n")
     matches = [json.loads(line) for line in lines if line]
-    
+
     # Should have a summary message about no matches
     assert len(matches) >= 1
 
@@ -298,14 +295,16 @@ def test_tool_grep_case_insensitive(temp_dir: Path) -> None:
     (temp_dir / "FOO_bar.py").touch()
 
     tool = tool_grep()
-    result_str = tool.handler({
-        "pattern": "hello",
-        "path": str(temp_dir),
-    })
-    
+    result_str = tool.handler(
+        {
+            "pattern": "hello",
+            "path": str(temp_dir),
+        }
+    )
+
     lines = result_str.strip().split("\n")
     matches = [json.loads(line) for line in lines if line]
-    
+
     # grep is case-insensitive by default
     assert len(matches) >= 1
 
@@ -369,10 +368,12 @@ def test_tool_interactive_user_choice_valid_selection() -> None:
     with patch("ragops_agent_ce.agent.tools.interactive_select") as mock_select:
         mock_select.return_value = "option2"
         tool = tool_interactive_user_choice()
-        result_str = tool.handler({
-            "title": "Choose one",
-            "choices": ["option1", "option2", "option3"],
-        })
+        result_str = tool.handler(
+            {
+                "title": "Choose one",
+                "choices": ["option1", "option2", "option3"],
+            }
+        )
         result = json.loads(result_str)
 
     assert result["selected_choice"] == "option2"
@@ -394,10 +395,12 @@ def test_tool_interactive_user_choice_cancelled() -> None:
     with patch("ragops_agent_ce.agent.tools.interactive_select") as mock_select:
         mock_select.return_value = None
         tool = tool_interactive_user_choice()
-        result_str = tool.handler({
-            "title": "Choose one",
-            "choices": ["option1", "option2"],
-        })
+        result_str = tool.handler(
+            {
+                "title": "Choose one",
+                "choices": ["option1", "option2"],
+            }
+        )
         result = json.loads(result_str)
 
     assert result["cancelled"] is True

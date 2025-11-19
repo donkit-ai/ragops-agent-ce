@@ -14,8 +14,6 @@ import json
 from typing import Any
 
 import pytest
-
-from tests.conftest import BaseMockProvider
 from ragops_agent_ce.agent.agent import LLMAgent
 from ragops_agent_ce.agent.tools import AgentTool
 from ragops_agent_ce.llm.base import LLMProvider
@@ -24,6 +22,7 @@ from ragops_agent_ce.llm.types import Message
 from ragops_agent_ce.llm.types import ToolCall
 from ragops_agent_ce.llm.types import ToolFunctionCall
 
+from tests.conftest import BaseMockProvider
 
 # ============================================================================
 # Test-specific configurations
@@ -40,11 +39,7 @@ def mock_provider() -> BaseMockProvider:
     """Create a mock provider with tool call scenario."""
     return BaseMockProvider(
         responses=[
-            {
-                "tool_calls": [
-                    {"name": "tool_a", "arguments": {"x": 5}}
-                ]
-            },
+            {"tool_calls": [{"name": "tool_a", "arguments": {"x": 5}}]},
             {"content": "The result is 25"},
         ]
     )
@@ -349,13 +344,13 @@ async def test_agent_tool_chaining() -> None:
     assert "tool_2" in call_sequence
     # tool_1 should be called before tool_2
     assert call_sequence.index("tool_1") < call_sequence.index("tool_2")
-    
+
     # Provider should have been called 3 times (tool_1, tool_2, final)
     assert provider.call_count == 3
-    
+
     # Final result should be present
     assert result == "Chain complete"
-    
+
     # Messages should contain tool results
     tool_messages = [m for m in messages if m.role == "tool"]
     assert len(tool_messages) == 2, "Should have 2 tool result messages"
