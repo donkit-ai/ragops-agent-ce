@@ -16,7 +16,7 @@ from ragops_agent_ce.llm.types import ToolCall
 from ragops_agent_ce.llm.types import ToolFunctionCall
 from ragops_agent_ce.mcp.client import MCPClient
 
-from tests.conftest import BaseMockProvider
+from .conftest import BaseMockProvider
 
 # ============================================================================
 # Fixtures and Mock Objects
