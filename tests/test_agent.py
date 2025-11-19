@@ -3,26 +3,20 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from typing import Any
 from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
 from unittest.mock import Mock
 
 import pytest
-
 from ragops_agent_ce.agent.agent import EventType
 from ragops_agent_ce.agent.agent import LLMAgent
-from ragops_agent_ce.agent.agent import StreamEvent
 from ragops_agent_ce.agent.tools import AgentTool
-from ragops_agent_ce.llm.base import LLMProvider
 from ragops_agent_ce.llm.types import LLMResponse
 from ragops_agent_ce.llm.types import Message
 from ragops_agent_ce.llm.types import ToolCall
 from ragops_agent_ce.llm.types import ToolFunctionCall
 from ragops_agent_ce.mcp.client import MCPClient
-from tests.conftest import BaseMockProvider
 
+from tests.conftest import BaseMockProvider
 
 # ============================================================================
 # Fixtures and Mock Objects
@@ -164,9 +158,7 @@ async def test_b2_tool_not_found(stub_messages: list[Message]):
 
 
 @pytest.mark.asyncio
-async def test_b3_exception_in_local_tool(
-    stub_messages: list[Message], local_tool_stub: AgentTool
-):
+async def test_b3_exception_in_local_tool(stub_messages: list[Message], local_tool_stub: AgentTool):
     """B3: Exception in local tool should be raised."""
     local_tool_stub.handler = Mock(side_effect=RuntimeError("fail"))
     provider = BaseMockProvider(
@@ -327,9 +319,7 @@ async def test_c1_successful_mcp_tool_call(
 
 
 @pytest.mark.asyncio
-async def test_c2_mcp_client_error(
-    stub_messages: list[Message], mcp_client_stub: AsyncMock
-):
+async def test_c2_mcp_client_error(stub_messages: list[Message], mcp_client_stub: AsyncMock):
     """C2: MCP client error should be raised."""
     mcp_client_stub._acall_tool = AsyncMock(side_effect=RuntimeError("mcp fail"))
     provider = BaseMockProvider(
@@ -435,6 +425,7 @@ async def test_f1_successful_tool_call_in_stream(
     stub_messages: list[Message], local_tool_stub: AgentTool
 ):
     """F1: Successful tool call in stream should emit START/END events."""
+
     def mock_stream(*args, **kwargs):
         # First chunk has tool call
         yield LLMResponse(

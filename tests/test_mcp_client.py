@@ -12,16 +12,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-
 from ragops_agent_ce.mcp.client import MCPClient
-
 
 # ============================================================================
 # Fixtures
@@ -147,9 +144,7 @@ async def test_alist_tools_connection_error(mocked_mcp_client) -> None:
     client = MCPClient(command="nonexistent_command", args=["server.py"])
 
     with mocked_mcp_client() as (mock_class, mock_instance):
-        mock_instance.__aenter__ = AsyncMock(
-            side_effect=ConnectionError("Failed to connect")
-        )
+        mock_instance.__aenter__ = AsyncMock(side_effect=ConnectionError("Failed to connect"))
         with pytest.raises(ConnectionError):
             await client._alist_tools()
 
@@ -160,9 +155,7 @@ async def test_alist_tools_cancellation(mocked_mcp_client) -> None:
     client = MCPClient(command="python", args=["server.py"])
 
     with mocked_mcp_client() as (mock_class, mock_instance):
-        mock_instance.__aenter__ = AsyncMock(
-            side_effect=asyncio.CancelledError("Cancelled")
-        )
+        mock_instance.__aenter__ = AsyncMock(side_effect=asyncio.CancelledError("Cancelled"))
         with pytest.raises(asyncio.CancelledError):
             await client._alist_tools()
 
@@ -273,9 +266,7 @@ async def test_acall_tool_cancellation(mocked_mcp_client) -> None:
     client = MCPClient(command="python", args=["server.py"])
 
     with mocked_mcp_client() as (mock_class, mock_instance):
-        mock_instance.__aenter__ = AsyncMock(
-            side_effect=asyncio.CancelledError("Cancelled")
-        )
+        mock_instance.__aenter__ = AsyncMock(side_effect=asyncio.CancelledError("Cancelled"))
         with pytest.raises(asyncio.CancelledError):
             await client._acall_tool("test_tool", {})
 
@@ -286,9 +277,7 @@ async def test_acall_tool_keyboard_interrupt(mocked_mcp_client) -> None:
     client = MCPClient(command="python", args=["server.py"])
 
     with mocked_mcp_client() as (mock_class, mock_instance):
-        mock_instance.__aenter__ = AsyncMock(
-            side_effect=KeyboardInterrupt("User interrupted")
-        )
+        mock_instance.__aenter__ = AsyncMock(side_effect=KeyboardInterrupt("User interrupted"))
         with pytest.raises(asyncio.CancelledError):
             await client._acall_tool("test_tool", {})
 

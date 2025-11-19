@@ -12,9 +12,8 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-from typer.testing import CliRunner
-
 from ragops_agent_ce.cli import app
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -173,8 +172,6 @@ def test_cli_short_system_option(cli_mocks) -> None:
 # ============================================================================
 # Tests: Error Handling
 # ============================================================================
-
-
 
 
 def test_cli_invalid_command() -> None:

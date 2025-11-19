@@ -8,9 +8,6 @@ from pathlib import Path
 from typing import Generator
 
 import pytest
-from sqlmodel import Session
-from sqlmodel import select
-
 from ragops_agent_ce.config import Settings
 from ragops_agent_ce.db import DB
 from ragops_agent_ce.db import KV
@@ -21,7 +18,8 @@ from ragops_agent_ce.db import kv_delete
 from ragops_agent_ce.db import kv_get
 from ragops_agent_ce.db import kv_set
 from ragops_agent_ce.db import migrate
-
+from sqlmodel import Session
+from sqlmodel import select
 
 # ============================================================================
 # Fixtures
@@ -179,7 +177,7 @@ def test_kv_all_by_prefix_empty_prefix(db: DB) -> None:
 
 def test_kv_operations_with_special_characters(db: DB) -> None:
     """Test KV operations with special characters in values."""
-    special_value = 'test"value\'with\\special\nchars'
+    special_value = "test\"value'with\\special\nchars"
     kv_set(db, "special_key", special_value)
     result = kv_get(db, "special_key")
 
@@ -354,7 +352,7 @@ def test_concurrent_kv_all_by_prefix(db: DB) -> None:
 
 def test_concurrent_delete_same_key(db: DB) -> None:
     """Test concurrent delete operations on the same key.
-    
+
     Note: With SQLite and check_same_thread=False, each thread gets its own
     session, so multiple threads may see the row as existing and attempt to
     delete it. The important thing is that the final state is consistent.
@@ -399,7 +397,6 @@ def test_db_context_manager(temp_db_path: Path) -> None:
 
 def test_kv_set_updates_timestamp(db: DB) -> None:
     """Test that kv_set updates the timestamp."""
-    import datetime
 
     kv_set(db, "key", "value1")
 

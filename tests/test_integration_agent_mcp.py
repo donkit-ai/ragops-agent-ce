@@ -11,13 +11,8 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
 
 import pytest
-
-from tests.conftest import BaseMockMCPClient
-from tests.conftest import BaseMockProvider
 from ragops_agent_ce.agent.agent import LLMAgent
 from ragops_agent_ce.agent.tools import AgentTool
 from ragops_agent_ce.llm.base import LLMProvider
@@ -26,6 +21,8 @@ from ragops_agent_ce.llm.types import Message
 from ragops_agent_ce.llm.types import ToolCall
 from ragops_agent_ce.llm.types import ToolFunctionCall
 
+from tests.conftest import BaseMockMCPClient
+from tests.conftest import BaseMockProvider
 
 # ============================================================================
 # Test-specific configurations
@@ -42,11 +39,7 @@ def mock_provider() -> BaseMockProvider:
     """Create a mock provider with MCP tool call scenario."""
     return BaseMockProvider(
         responses=[
-            {
-                "tool_calls": [
-                    {"name": "mcp_tool_a", "arguments": {"x": 10}}
-                ]
-            },
+            {"tool_calls": [{"name": "mcp_tool_a", "arguments": {"x": 10}}]},
             {"content": "MCP tool returned: 100"},
         ]
     )
