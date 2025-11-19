@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -163,12 +164,21 @@ class LLMAgent:
                 logger.debug(f"Local tool {tc.function.name} result: {str(result)[:200]}...")
             elif mcp_tool_info:
                 tool_meta, client = mcp_tool_info
+
                 result = await client._acall_tool(tool_meta["name"], args)
                 logger.debug(f"MCP tool {tc.function.name} result: {str(result)[:200]}...")
             else:
                 result = f"Error: Tool '{tc.function.name}' not found or MCP client not configured."
                 logger.error(result)
 
+        except KeyboardInterrupt:
+            logger.warning(f"Tool {tc.function.name} execution cancelled by user")
+            # Don't raise - return cancellation message instead
+            return "Tool execution cancelled by user (Ctrl+C)"
+        except asyncio.CancelledError:
+            logger.warning(f"Tool {tc.function.name} execution cancelled")
+            # Don't raise - return cancellation message instead
+            return "Tool execution cancelled by user (Ctrl+C)"
         except Exception as e:
             logger.error(f"Tool execution error: {e}", exc_info=True)
             raise
@@ -214,7 +224,7 @@ class LLMAgent:
 
     async def achat_stream(
         self, *, prompt: str, system: str | None = None, model: str | None = None
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[StreamEvent]:
         """Chat with streaming output. Yields text chunks."""
         messages: list[Message] = []
         if system:
@@ -293,7 +303,7 @@ class LLMAgent:
                         try:
                             # Execute tool
                             result_str = await self._aexecute_tool_call(tc, args)
-                            # Add tool result to messages
+                            # Add the tool result to messages
                             messages.append(
                                 Message(
                                     role="tool",
@@ -309,7 +319,7 @@ class LLMAgent:
                         except Exception as e:
                             error_msg = str(e)
                             logger.error(f"Tool {tc.function.name} failed: {error_msg}")
-                            # Add error as tool result
+                            # Add an error as the tool result
                             messages.append(
                                 Message(
                                     role="tool",
@@ -318,7 +328,7 @@ class LLMAgent:
                                     content=f"Error: {error_msg}",
                                 )
                             )
-                            # Yield tool call error event
+                            # Yield the tool call error event
                             yield StreamEvent(
                                 type=EventType.TOOL_CALL_ERROR,
                                 tool_name=tc.function.name,

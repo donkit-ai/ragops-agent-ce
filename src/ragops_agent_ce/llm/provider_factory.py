@@ -63,14 +63,8 @@ def get_provider(settings: Settings | None = None, llm_provider: str | None = No
         openrouter_cfg = cfg.model_copy(update={"openai_base_url": "https://openrouter.ai/api/v1"})
         return cls(openrouter_cfg)
     elif provider_key == "ollama":
-        # Ollama uses OpenAI-compatible API with custom base_url
-        # Use ollama_base_url from config, API key not required
         ollama_cfg = cfg.model_copy(
-            update={
-                "openai_base_url": f"{cfg.ollama_base_url}/v1",
-                "openai_api_key": "ollama",  # Ollama doesn't require real API key
-            }
+            update={"openai_base_url": settings.ollama_base_url, "openai_api_key": "ollama"}
         )
         return cls(ollama_cfg)
-
     return cls(cfg)

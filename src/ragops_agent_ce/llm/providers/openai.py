@@ -157,7 +157,10 @@ class OpenAIProvider(LLMProvider):
         if top_p is not None:
             kwargs["top_p"] = top_p
         if max_tokens is not None:
-            kwargs["max_tokens"] = max_tokens
+            if "gpt" in model and "oss" not in model:
+                kwargs["max_completion_tokens"] = max_tokens
+            else:
+                kwargs["max_tokens"] = max_tokens
 
         # Make API call
         response = self._client.chat.completions.create(**kwargs)
@@ -215,7 +218,7 @@ class OpenAIProvider(LLMProvider):
         if top_p is not None:
             kwargs["top_p"] = top_p
         if max_tokens is not None:
-            kwargs["max_tokens"] = max_tokens
+            kwargs["max_completion_tokens"] = max_tokens
 
         # Make streaming API call
         stream = self._client.chat.completions.create(**kwargs)

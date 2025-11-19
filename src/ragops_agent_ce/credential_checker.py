@@ -57,11 +57,8 @@ def check_provider_credentials(provider: str, env_path: Path | None = None) -> b
 
     elif provider == "ollama":
         # Ollama requires base_url configuration (usually localhost:11434)
-        # API key is set to "ollama" (dummy value) during setup
-        base_url = config.get("RAGOPS_OPENAI_BASE_URL", "")
-        has_ollama_url = "localhost:11434" in base_url or "127.0.0.1:11434" in base_url
-        has_api_key = bool(config.get("RAGOPS_OPENAI_API_KEY"))
-        return has_ollama_url and has_api_key
+        base_url = config.get("RAGOPS_OLLAMA_BASE_URL", "")
+        return bool(base_url)
 
     elif provider == "openrouter":
         # OpenRouter has its own API key, different from OpenAI
