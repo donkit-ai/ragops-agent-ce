@@ -134,7 +134,7 @@ class Embedder(BaseModel):
 
     embedder_type: EmbedderType = Field(description=EMBEDDER_TYPE_DESCRIPTION)
     model_name: str | None = Field(
-        default=None,
+        default=...,
         description=(
             "Specific embedding model name for the embedder provider. "
             "For OpenAI: text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002. "
