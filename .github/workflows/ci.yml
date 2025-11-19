@@ -18,7 +18,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.13.1"
 
       - name: Install dependencies
         run: |
@@ -34,12 +34,6 @@ jobs:
         run: |
           set +e
           poetry run pytest -q
-          rc=$?
-          if [ "$rc" -eq 5 ]; then
-            echo "No tests collected. Skipping failure."
-            exit 0
-          fi
-          exit $rc
 
   check-version:
     name: Check version bump
