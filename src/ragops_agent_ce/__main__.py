@@ -26,7 +26,7 @@ try:
 except ImportError:
     pass
 
-from .cli import app
+from ragops_agent_ce.cli import app
 
 if __name__ == "__main__":
     # Allow running as: python -m ragops_agent_ce

@@ -49,6 +49,10 @@ PROVIDERS = {
         "display": "OpenRouter",
         "description": "Access 100+ models via OpenRouter API",
     },
+    "donkit": {
+        "display": "Donkit",
+        "description": "Donkit default model",
+    },
 }
 
 
