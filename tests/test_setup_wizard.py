@@ -99,15 +99,15 @@ def test_configure_openai_empty_key(
 def test_configure_openai_with_custom_model(
     mock_prompt: MagicMock, mock_confirm: MagicMock, wizard: SetupWizard
 ) -> None:
-    """Test OpenAI configuration with custom model."""
-    mock_prompt.side_effect = ["sk-test-key-123", "gpt-4-turbo"]
-    mock_confirm.side_effect = [True, False, False]
+    """Test OpenAI configuration with custom embedding model."""
+    mock_prompt.side_effect = ["sk-test-key-123", "text-embedding-3-large"]
+    mock_confirm.side_effect = [True, False]
 
     result = wizard._configure_openai()
 
     assert result is True
     assert wizard.config["RAGOPS_OPENAI_API_KEY"] == "sk-test-key-123"
-    assert wizard.config["RAGOPS_LLM_MODEL"] == "gpt-4-turbo"
+    assert wizard.config["RAGOPS_OPENAI_EMBEDDINGS_MODEL"] == "text-embedding-3-large"
 
 
 @patch("ragops_agent_ce.setup_wizard.interactive_confirm")
@@ -120,7 +120,7 @@ def test_configure_openai_with_custom_url(
         "sk-test-key-123",
         "https://api.custom.com/v1",
     ]
-    mock_confirm.side_effect = [False, False, True]
+    mock_confirm.side_effect = [False, True]  # Skip embedding model, use custom URL
 
     result = wizard._configure_openai()
 
@@ -187,8 +187,6 @@ def test_configure_ollama_success(mock_prompt: MagicMock, wizard: SetupWizard) -
     """Test successful Ollama configuration."""
     mock_prompt.side_effect = [
         "http://localhost:11434/v1",
-        "mistral",
-        "mistral",
         "nomic-embed-text",
     ]
 
@@ -196,7 +194,6 @@ def test_configure_ollama_success(mock_prompt: MagicMock, wizard: SetupWizard) -
 
     assert result is True
     assert wizard.config["RAGOPS_OLLAMA_BASE_URL"] == "http://localhost:11434/v1"
-    assert wizard.config["RAGOPS_LLM_MODEL"] == "mistral"
     assert wizard.config["RAGOPS_OLLAMA_EMBEDDINGS_MODEL"] == "nomic-embed-text"
 
 
@@ -205,7 +202,6 @@ def test_configure_openrouter_success(mock_prompt: MagicMock, wizard: SetupWizar
     """Test successful OpenRouter configuration."""
     mock_prompt.side_effect = [
         "openrouter-key-123",
-        "openai/gpt-4o-mini",
     ]
 
     with patch.object(wizard, "_choose_provider", return_value="openai"):
@@ -215,7 +211,6 @@ def test_configure_openrouter_success(mock_prompt: MagicMock, wizard: SetupWizar
     assert result is True
     assert wizard.config["RAGOPS_OPENAI_API_KEY"] == "openrouter-key-123"
     assert wizard.config["RAGOPS_OPENAI_BASE_URL"] == "https://openrouter.ai/api/v1"
-    assert wizard.config["RAGOPS_LLM_MODEL"] == "openai/gpt-4o-mini"
 
 
 # ============================================================================
@@ -365,7 +360,7 @@ def test_openai_custom_url_format_validation(
         "sk-test-key-123",
         "https://api.custom.com/v1",
     ]
-    mock_confirm.side_effect = [False, False, True]
+    mock_confirm.side_effect = [False, True]  # Skip embedding model, use custom URL
 
     result = wizard._configure_openai()
 

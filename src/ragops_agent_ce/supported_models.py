@@ -1,4 +1,3 @@
-
 SUPPORTED_MODELS = {
     "openai": [
         "o1",

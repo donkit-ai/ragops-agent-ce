@@ -74,10 +74,10 @@ def save_provider_config(config: dict[str, str], env_path: Path | None = None) -
 def get_available_models(prov: object, provider_key: str) -> list[str]:
     """
     Collect available chat models for provider.
-    
+
     If SUPPORTED_MODELS has entries for this provider, return the intersection
     of fetched models and supported models (filtering out unsupported ones).
-    
+
     If fetched list is empty or fails, fallback to supported models.
     If supported list is empty (e.g. Ollama), return all fetched models.
     """
