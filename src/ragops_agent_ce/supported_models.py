@@ -1,0 +1,51 @@
+SUPPORTED_MODELS = {
+    "openai": [
+        "o1",
+        "o3-mini",
+        "gpt-4o",
+        "gpt-4o-mini",
+        # 5.1 Family
+        "gpt-5.1",
+        "gpt-5.1-mini",
+        "gpt-5.1-codex",
+        # 4.1 Family
+        "gpt-4.1",
+        "gpt-4.1-mini",
+        "gpt-4.1-codex",
+    ],
+    "azure_openai": [
+        "gpt-4o",
+        "gpt-4o-mini",
+    ],
+    "vertex": [
+        "gemini-2.0-flash-001",
+        "gemini-1.5-pro-002",
+        "gemini-3-pro",
+        "gemini-2.5-pro",
+        "gemini-3-flash",
+        "gemini-2.5-flash",
+    ],
+    "ollama": [],
+    "openrouter": [
+        "openai/gpt-5.1",
+        "openai/gpt-5.1-mini",
+        "openai/gpt-5.1-codex",
+        "openai/gpt-4.1",
+        "openai/gpt-4.1-mini",
+        "openai/gpt-4.1-codex",
+        "google/gemini-3-pro",
+        "google/gemini-2.5-pro",
+        "google/gemini-3-flash",
+        "google/gemini-2.5-flash",
+        "deepseek/deepseek-r1",
+        "deepseek/deepseek-v3",
+        "qwen/qwen-2.5-72b-instruct",
+        "qwen/qwen-2.5-coder-32b-instruct",
+        "openai/gpt-4o",
+        "openai/o1",
+    ],
+    "anthropic": [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-haiku-20241022",
+    ],
+}

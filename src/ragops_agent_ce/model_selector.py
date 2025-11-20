@@ -19,6 +19,7 @@ from ragops_agent_ce.db import kv_get
 from ragops_agent_ce.db import kv_set
 from ragops_agent_ce.db import open_db
 from ragops_agent_ce.interactive_input import interactive_select
+from ragops_agent_ce.supported_models import SUPPORTED_MODELS
 
 if TYPE_CHECKING:
     pass
@@ -289,55 +290,16 @@ def select_model_at_startup(
                 "[dim]Note: Could not fetch models from provider API (using fallback list)[/dim]\n"
             )
 
-        # Fallback to common models if provider doesn't support listing or failed
-        if not models:
-            common_models = {
-                "openai": [
-                    "gpt-4o",
-                    "gpt-4o-mini",
-                    "gpt-4-turbo",
-                    "gpt-4",
-                    "gpt-3.5-turbo",
-                    "o1-preview",
-                    "o1-mini",
-                ],
-                "azure_openai": [
-                    "gpt-4o",
-                    "gpt-4o-mini",
-                    "gpt-4-turbo",
-                    "gpt-4",
-                    "gpt-3.5-turbo",
-                ],
-                "vertex": [
-                    "gemini-2.5-flash",
-                    "gemini-2.0-flash-exp",
-                    "gemini-1.5-pro",
-                    "gemini-1.5-flash",
-                    "gemini-pro",
-                ],
-                "ollama": [
-                    "llama3.1",
-                    "llama3",
-                    "mistral",
-                    "mixtral",
-                    "phi3",
-                    "codellama",
-                ],
-                "openrouter": [
-                    "openai/gpt-4o",
-                    "openai/gpt-4-turbo",
-                    "anthropic/claude-3.5-sonnet",
-                    "google/gemini-pro-1.5",
-                    "meta-llama/llama-3.1-70b-instruct",
-                ],
-                "anthropic": [
-                    "claude-3-5-sonnet-20241022",
-                    "claude-3-opus-20240229",
-                    "claude-3-sonnet-20240229",
-                    "claude-3-haiku-20240307",
-                ],
-            }
-            models = common_models.get(selected_provider, [])
+        # Apply supported models filter logic
+        supported = SUPPORTED_MODELS.get(selected_provider, [])
+
+        if models:
+            if supported:
+                # Intersection: Keep supported models that exist in fetched list
+                models = [m for m in supported if m in models]
+        else:
+            # Fallback if fetch failed or returned empty
+            models = supported
 
         # Get latest model selection for this provider
         latest_model = None
@@ -399,30 +361,37 @@ def select_model_at_startup(
                         else:
                             friendly_msg = f"Model '{model}' is not available: {error_msg}"
                         console.print(f"[bold red]Error:[/bold red] {friendly_msg}")
-                        console.print("[yellow]Please select a different model.[/yellow]\n")
-                        # Ask user to select again
-                        retry_model = interactive_select(
-                            choices, title=title, default_index=default_index
-                        )
-                        if retry_model and retry_model != "Skip (use default)":
-                            model = retry_model.split(" [")[0].strip()
-                            # Try validation again (but don't loop forever)
-                            try:
-                                provider_instance.generate(
-                                    [Message(role="user", content="test")],
-                                    model=model,
-                                    max_tokens=1,
-                                )
-                                console.print(f"✓ Model selected: [green]{model}[/green]\n")
-                            except Exception:
-                                # If still fails, set it anyway but warn
-                                console.print(
-                                    "[yellow]Warning:[/yellow] Model validation failed, "
-                                    "but it will be set anyway.\n"
-                                )
-                                model = None  # Set to None to use default
+
+                        # Ask if user wants to force use the model anyway
+                        from ragops_agent_ce.interactive_input import interactive_confirm
+
+                        if interactive_confirm("Use this model anyway?", default=False):
+                            console.print(f"✓ Model selected (forced): [yellow]{model}[/yellow]\n")
                         else:
-                            model = None  # User skipped or cancelled
+                            console.print("[yellow]Please select a different model.[/yellow]\n")
+                            # Ask user to select again
+                            retry_model = interactive_select(
+                                choices, title=title, default_index=default_index
+                            )
+                            if retry_model and retry_model != "Skip (use default)":
+                                model = retry_model.split(" [")[0].strip()
+                                # Try validation again (but don't loop forever)
+                                try:
+                                    provider_instance.generate(
+                                        [Message(role="user", content="test")],
+                                        model=model,
+                                        max_tokens=1,
+                                    )
+                                    console.print(f"✓ Model selected: [green]{model}[/green]\n")
+                                except Exception:
+                                    # If still fails, set it anyway but warn
+                                    console.print(
+                                        "[yellow]Warning:[/yellow] Model validation failed, "
+                                        "but it will be set anyway.\n"
+                                    )
+                                    # Keep the model even if validation fails on retry
+                            else:
+                                model = None  # User skipped or cancelled
                 except Exception as e:
                     # If validation itself fails, still set the model but warn
                     console.print(

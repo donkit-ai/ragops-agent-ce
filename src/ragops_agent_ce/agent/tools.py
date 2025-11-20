@@ -452,3 +452,183 @@ def tool_interactive_user_confirm() -> AgentTool:
         },
         handler=_handler,
     )
+
+
+def tool_quick_start_rag_config() -> AgentTool:
+    """Tool for quickly setting up RAG with recommended settings."""
+
+    def _handler(args: dict[str, Any]) -> str:
+        # Ask user if they want to use quick start or customize
+        use_quick_start = interactive_confirm(
+            question="Use recommended Quick Start settings? (You can customize later)",
+            default=True
+        )
+
+        if use_quick_start is None:
+            return json.dumps({"cancelled": True, "use_quick_start": None})
+
+        if not use_quick_start:
+            return json.dumps({
+                "cancelled": False,
+                "use_quick_start": False,
+                "message": "User wants to customize. Please ask for each setting individually."
+            })
+
+        # Quick start confirmed - return recommended config template
+        quick_config = {
+            "use_quick_start": True,
+            "message": "Quick Start configuration selected. Use these recommended settings.",
+            "recommended_config": {
+                "embedder_provider": "openai",
+                "embedder_model": "text-embedding-3-small",
+                "generation_provider": "openai",
+                "generation_model": "gpt-4o-mini",
+                "vector_db": "qdrant",
+                "read_format": "json",
+                "split_type": "semantic",
+                "chunk_size": 1000,
+                "chunk_overlap": 100,
+                "ranker": False,
+                "partial_search": True,
+                "query_rewrite": True,
+                "composite_query_detection": False
+            },
+            "note": "These are production-ready defaults. Users can modify config later if needed."
+        }
+
+        return json.dumps(quick_config, ensure_ascii=False)
+
+    return AgentTool(
+        name="quick_start_rag_config",
+        description=(
+            "Offer Quick Start mode with recommended RAG configuration settings. "
+            "This is the PREFERRED way to configure RAG for most users - it reduces 13 questions to 1. "
+            "Use this tool FIRST before asking individual configuration questions. "
+            "If user confirms Quick Start, use the returned recommended settings. "
+            "If user declines, then proceed with asking individual configuration questions using interactive_user_choice. "
+            "Recommended defaults: OpenAI embeddings (text-embedding-3-small), GPT-4o-mini for generation, "
+            "Qdrant vector DB, JSON format with semantic splitting, 1000 chunk size, 100 overlap."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+        handler=_handler,
+    )
+
+
+def tool_update_rag_config_field() -> AgentTool:
+    """Tool for updating a single field in RAG configuration without re-asking all questions."""
+
+    def _handler(args: dict[str, Any]) -> str:
+        field_name = str(args.get("field_name", ""))
+
+        if not field_name:
+            return json.dumps({
+                "error": "field_name is required",
+                "available_fields": [
+                    "chunk_size", "chunk_overlap", "split_type",
+                    "vector_db (db_type)", "embedder_provider (embedder.embedder_type)",
+                    "embedder_model (embedder.model_name)", "generation_model",
+                    "ranker", "partial_search", "query_rewrite", "composite_query_detection"
+                ]
+            })
+
+        # Map user-friendly field names to config paths
+        field_mappings = {
+            "chunk_size": ("chunking_options.chunk_size", ["250", "500", "1000", "2000", "other (I will specify)"]),
+            "chunk_overlap": ("chunking_options.chunk_overlap", ["0", "50", "100", "200", "other (I will specify)"]),
+            "split_type": ("chunking_options.split_type", ["character", "sentence", "paragraph", "semantic", "markdown"]),
+            "vector_db": ("db_type", ["qdrant", "chroma", "milvus"]),
+            "db_type": ("db_type", ["qdrant", "chroma", "milvus"]),
+            "embedder_provider": ("embedder.embedder_type", ["openai", "vertex", "azure_openai", "ollama"]),
+            "embedder_model": ("embedder.model_name", None),  # Free text
+            "generation_model": ("generation_model_name", None),  # Free text
+            "ranker": ("ranker", None),  # Boolean confirm
+            "partial_search": ("retriever_options.partial_search", None),  # Boolean
+            "query_rewrite": ("retriever_options.query_rewrite", None),  # Boolean
+            "composite_query_detection": ("retriever_options.composite_query_detection", None),  # Boolean
+        }
+
+        if field_name not in field_mappings:
+            return json.dumps({
+                "error": f"Unknown field: {field_name}",
+                "available_fields": list(field_mappings.keys())
+            })
+
+        config_path, choices = field_mappings[field_name]
+
+        # Ask for new value
+        if choices:
+            # Multiple choice
+            selected = interactive_select(
+                choices=choices,
+                title=f"Select new value for {field_name}"
+            )
+            if selected is None:
+                return json.dumps({"cancelled": True, "field_name": field_name})
+
+            new_value = selected
+            if "other" in selected.lower():
+                # User needs to specify custom value in their next message
+                return json.dumps({
+                    "cancelled": False,
+                    "field_name": field_name,
+                    "needs_custom_value": True,
+                    "message": f"User selected 'other'. Ask them to specify the custom value for {field_name}."
+                })
+        else:
+            # Boolean or free text - for now, assume boolean for these specific fields
+            if field_name in ["ranker", "partial_search", "query_rewrite", "composite_query_detection"]:
+                confirmed = interactive_confirm(
+                    question=f"Enable {field_name}?",
+                    default=False
+                )
+                if confirmed is None:
+                    return json.dumps({"cancelled": True, "field_name": field_name})
+                new_value = confirmed
+            else:
+                # Free text fields - return instruction for agent to ask
+                return json.dumps({
+                    "cancelled": False,
+                    "field_name": field_name,
+                    "needs_custom_value": True,
+                    "message": f"Ask user to provide new value for {field_name} in their next message."
+                })
+
+        return json.dumps({
+            "cancelled": False,
+            "field_name": field_name,
+            "config_path": config_path,
+            "new_value": new_value,
+            "message": f"User selected '{new_value}' for {field_name}. Use save_rag_config with partial update."
+        }, ensure_ascii=False)
+
+    return AgentTool(
+        name="update_rag_config_field",
+        description=(
+            "Update a single field in RAG configuration without asking all 13 questions again. "
+            "Use this when user wants to modify one specific setting (e.g., 'change chunk size'). "
+            "This tool will ask for just that one field and return the value to update via save_rag_config. "
+            "Available fields: chunk_size, chunk_overlap, split_type, vector_db, embedder_provider, "
+            "embedder_model, generation_model, ranker, partial_search, query_rewrite, composite_query_detection. "
+            "After getting the response, use save_rag_config with the partial update shown in config_path."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "field_name": {
+                    "type": "string",
+                    "description": (
+                        "The field to update. Options: chunk_size, chunk_overlap, split_type, vector_db, "
+                        "embedder_provider, embedder_model, generation_model, ranker, partial_search, "
+                        "query_rewrite, composite_query_detection"
+                    ),
+                },
+            },
+            "required": ["field_name"],
+            "additionalProperties": False,
+        },
+        handler=_handler,
+    )
