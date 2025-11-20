@@ -2,18 +2,20 @@
 
 import json
 from datetime import datetime
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any
+from typing import AsyncIterator
+from typing import Dict
+from typing import List
+from typing import Optional
 from uuid import UUID
 
 import aiohttp
 from websockets.asyncio.client import connect
 
-from .errors import (
-    RagopsAPIGatewayConnectionError,
-    RagopsAPIGatewayError,
-    RagopsAPIGatewayMaxAttemptsExceededError,
-    RagopsAPIGatewayResponseError,
-)
+from .errors import RagopsAPIGatewayConnectionError
+from .errors import RagopsAPIGatewayError
+from .errors import RagopsAPIGatewayMaxAttemptsExceededError
+from .errors import RagopsAPIGatewayResponseError
 from .schemas import ProjectInfo
 from .ws_handler import WsHandler
 
@@ -150,9 +152,7 @@ class RagopsAPIGatewayClient:
             "project_id": str(project_id),
             "updated_after": updated_after.isoformat(),
         }
-        async with self._session.get(
-            f"{self.base_url}/experiment-updates", params=params
-        ) as resp:
+        async with self._session.get(f"{self.base_url}/experiment-updates", params=params) as resp:
             if resp.status != 200:
                 await self._handle_error_response(resp)
             data = await resp.json()
@@ -168,9 +168,7 @@ class RagopsAPIGatewayClient:
         url = f"{self.base_url.replace('http', 'ws')}/agent/ws?project_id={project_id}"
         connection_attempts = 0
         try:
-            async with connect(
-                url, additional_headers={"X-API-Token": self.api_token}
-            ) as ws:
+            async with connect(url, additional_headers={"X-API-Token": self.api_token}) as ws:
                 connection_attempts = 0
                 await self.ws_handler.handle_ws_connection(ws)
         except Exception as e:
@@ -210,9 +208,7 @@ class RagopsAPIGatewayClient:
             "response_format": response_format,
             "project_id": project_id,
         }
-        async with self._session.post(
-            f"{self.base_url}/v1/generate", json=payload
-        ) as resp:
+        async with self._session.post(f"{self.base_url}/v1/generate", json=payload) as resp:
             if resp.status != 200:
                 await self._handle_error_response(resp)
             return await resp.json()
@@ -248,9 +244,7 @@ class RagopsAPIGatewayClient:
             "response_format": response_format,
             "project_id": project_id,
         }
-        async with self._session.post(
-            f"{self.base_url}/v1/generate/stream", json=payload
-        ) as resp:
+        async with self._session.post(f"{self.base_url}/v1/generate/stream", json=payload) as resp:
             if resp.status != 200:
                 await self._handle_error_response(resp)
             async for line in resp.content:
@@ -286,9 +280,7 @@ class RagopsAPIGatewayClient:
             "dimensions": dimensions,
             "project_id": project_id,
         }
-        async with self._session.post(
-            f"{self.base_url}/v1/embeddings", json=payload
-        ) as resp:
+        async with self._session.post(f"{self.base_url}/v1/embeddings", json=payload) as resp:
             if resp.status != 200:
                 await self._handle_error_response(resp)
             return await resp.json()

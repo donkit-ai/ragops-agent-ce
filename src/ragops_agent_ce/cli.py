@@ -120,10 +120,12 @@ def main(
                 "openrouter": "openai/gpt-4o-mini",
                 "donkit": "gpt5",
                 "anthropic": "claude-3-5-sonnet-20241022",
-                "mock": "gpt-4o-mini"
+                "mock": "gpt-4o-mini",
             }
             model = default_models.get((provider or "").lower(), "gpt-4o-mini")
-            console.print(f"[yellow]No model selected. Using default: [cyan]{model}[/cyan][/yellow]")
+            console.print(
+                f"[yellow]No model selected. Using default: [cyan]{model}[/cyan][/yellow]"
+            )
 
         asyncio.run(
             _astart_repl(

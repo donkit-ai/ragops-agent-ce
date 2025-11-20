@@ -1,6 +1,6 @@
 from typing import Protocol
-
 from typing import runtime_checkable
+
 from websockets import ClientConnection
 
 

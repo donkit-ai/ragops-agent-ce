@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+from donkit.ragops_api_gateway_client.client import RagopsAPIGatewayClient
+
+from ...config import Settings
+from ...config import load_settings
 from ..base import LLMProvider
 from ..types import LLMResponse
 from ..types import Message
 from ..types import ToolSpec
-from ...config import Settings
-from ...config import load_settings
-
-from donkit.ragops_api_gateway_client.client import RagopsAPIGatewayClient
 
 
 class DonkitProvider(LLMProvider):
@@ -64,6 +64,7 @@ class DonkitProvider(LLMProvider):
         if loop and loop.is_running():
             # Running inside an event loop (e.g. Jupyter, FastAPI, etc.)
             import nest_asyncio
+
             nest_asyncio.apply()
             data = loop.run_until_complete(_run())
         else:
@@ -122,6 +123,7 @@ class DonkitProvider(LLMProvider):
 
         if loop and loop.is_running():
             import nest_asyncio
+
             nest_asyncio.apply()
             gen = _stream()
             while True:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+from ..config import Settings
+from ..config import load_settings
 from .base import LLMProvider
 from .providers.anthropic import AnthropicProvider
 from .providers.azure_openai import AzureOpenAIProvider
@@ -9,10 +11,15 @@ from .providers.donkit import DonkitProvider
 from .providers.mock import MockProvider
 from .providers.openai import OpenAIProvider
 from .providers.vertex import VertexProvider
-from ..config import Settings
-from ..config import load_settings
 
-PROVIDERS_TYPES = [OpenAIProvider, AzureOpenAIProvider, AnthropicProvider, MockProvider, VertexProvider, DonkitProvider]
+PROVIDERS_TYPES = [
+    OpenAIProvider,
+    AzureOpenAIProvider,
+    AnthropicProvider,
+    MockProvider,
+    VertexProvider,
+    DonkitProvider,
+]
 
 PROVIDER_TYPES: dict[str, type[LLMProvider]] = {p.name: p for p in PROVIDERS_TYPES}
 

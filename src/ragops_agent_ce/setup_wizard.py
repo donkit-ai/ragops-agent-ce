@@ -131,15 +131,15 @@ class SetupWizard:
                         "needs separate embeddings provider)",
                         "available": True,
                         "has_embeddings": False,
-                    }
-            "6": {
-                "name": "donkit",
-                "display": "Donkit",
-                "description": "Donkit default models via Donkit API",
-                "available": True,
-            },
-        }
-)
+                    },
+                    "6": {
+                        "name": "donkit",
+                        "display": "Donkit",
+                        "description": "Donkit default models via Donkit API",
+                        "available": True,
+                    },
+                }
+            )
         # Build list of available choices for interactive selection
         available_providers = [(key, info) for key, info in providers.items() if info["available"]]
         choices = [
