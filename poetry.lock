@@ -1562,15 +1562,15 @@ unstructured = {version = ">=0.18.15,<0.19.0", extras = ["pdf"]}
 
 [[package]]
 name = "donkit-vectorstore-loader"
-version = "0.1.5"
+version = "0.1.6"
 description = "Vectorstore upload helpers for Donkit RagOps"
 optional = false
 python-versions = "<4.0,>=3.12"
 groups = ["main"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
-    {file = "donkit_vectorstore_loader-0.1.5-py3-none-any.whl", hash = "sha256:74a248570f216d16bd1bb03ff627d4c25e7ffbb9127503552f71bdc7b7f5533c"},
-    {file = "donkit_vectorstore_loader-0.1.5.tar.gz", hash = "sha256:d46d75f7a3ba4a15ff725c1832ea6ad89eabc1fcff1e79251b699bf2d34a352f"},
+    {file = "donkit_vectorstore_loader-0.1.6-py3-none-any.whl", hash = "sha256:db811f0491efd2a0c38a9860e054dd051b92fc3f2ccc21eaa62985934c36f544"},
+    {file = "donkit_vectorstore_loader-0.1.6.tar.gz", hash = "sha256:e88ca3b905bac5004fdf65ead923bf77088e0cff53a39e62def6341f70777915"},
 ]
 
 [package.dependencies]
@@ -1581,7 +1581,7 @@ loguru = ">=0.7.3,<0.8.0"
 protobuf = "6.33.0"
 pydantic = ">=2.7.4,<3.0.0"
 pymilvus = "2.6.0"
-qdrant-client = {version = ">=1.15.1,<2.0.0", extras = ["fastembed"]}
+qdrant-client = {version = "1.15.1", extras = ["fastembed"]}
 
 [[package]]
 name = "durationpy"
@@ -10338,4 +10338,4 @@ cffi = ["cffi (>=1.17,<2.0)", "cffi (>=2.0.0b)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "9b2aee33c071d6978c206d80f331fdd6257c52ea13b6440c6ecc73ff60bad756"
+content-hash = "72e9de13774f4eb2624934e7c64bcab87cec8508d99e0fbd250bfbfff17d1a84"

@@ -164,13 +164,13 @@ class SetupWizard:
             case "vertex":
                 return self._configure_vertex()
             case "openai":
-                return self._configure_openai(use_case)
+                return self._configure_openai()
             case "azure_openai":
                 return self._configure_azure_openai(use_case)
             case "anthropic":
                 return self._configure_anthropic()
             case "ollama":
-                return self._configure_ollama(use_case)
+                return self._configure_ollama()
             case "openrouter":
                 return self._configure_openrouter()
             case _:
@@ -334,7 +334,7 @@ class SetupWizard:
         console.print("✓ Azure OpenAI configured\n")
         return True
 
-    def _configure_ollama(self, use_case: str = "chat") -> bool:
+    def _configure_ollama(self) -> bool:
         """Configure Ollama local instance."""
         console.print("[dim]Make sure Ollama is installed and running.[/dim]")
         console.print("[dim]Install at: https://ollama.ai[/dim]\n")
