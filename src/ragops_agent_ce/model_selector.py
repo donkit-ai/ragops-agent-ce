@@ -14,11 +14,13 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 from rich.text import Text
 
+from ragops_agent_ce.config import load_settings
 from ragops_agent_ce.credential_checker import check_provider_credentials
 from ragops_agent_ce.db import kv_get
 from ragops_agent_ce.db import kv_set
 from ragops_agent_ce.db import open_db
 from ragops_agent_ce.interactive_input import interactive_select
+from ragops_agent_ce.llm.provider_factory import get_provider
 from ragops_agent_ce.supported_models import SUPPORTED_MODELS
 
 if TYPE_CHECKING:
@@ -276,9 +278,6 @@ def select_model_at_startup(
         # Try to get models from provider
         models = []
         try:
-            from ragops_agent_ce.config import load_settings
-            from ragops_agent_ce.llm.provider_factory import get_provider
-
             settings = load_settings()
             # Temporarily set provider in settings for model listing
             temp_settings = settings.model_copy(update={"llm_provider": selected_provider})
