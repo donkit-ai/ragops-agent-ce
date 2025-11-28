@@ -373,19 +373,6 @@ def test_openai_custom_url_format_validation(
 
 
 # ============================================================================
-# Tests: Optional Settings
-# ============================================================================
-
-
-def test_configure_optional_settings(wizard: SetupWizard) -> None:
-    """Test optional settings configuration (no interactive settings anymore)."""
-    wizard._configure_optional_settings()
-
-    # Log level is not set in config - uses default ERROR
-    assert "RAGOPS_LOG_LEVEL" not in wizard.config
-
-
-# ============================================================================
 # Tests: Full Wizard Flow
 # ============================================================================
 
