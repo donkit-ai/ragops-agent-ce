@@ -9,7 +9,6 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="importlib
 # Suppress all DeprecationWarnings globally
 warnings.simplefilter("ignore", DeprecationWarning)
 
-import asyncio
 import json
 import os
 from pathlib import Path
@@ -48,7 +47,7 @@ server = FastMCP(
         "Support only .json"
     ).strip(),
 )
-async def chunk_documents(args: ChunkDocumentsArgs) -> str:
+def chunk_documents(args: ChunkDocumentsArgs) -> str:
     logger.debug(f"chunk_documents called with: {args.model_dump()}")
     chunker = DonkitChunker(args.params)
     source_dir = Path(args.source_path)
@@ -93,9 +92,7 @@ async def chunk_documents(args: ChunkDocumentsArgs) -> str:
 
         try:
             logger.debug(f"Starting chunking for {file.name}")
-            # Run blocking chunking operation in the thread pool
-            chunked_documents = await asyncio.to_thread(
-                chunker.chunk_file,
+            chunked_documents = chunker.chunk_file(
                 file_path=str(file),
             )
             logger.debug(f"Chunking complete for {file.name}, got {len(chunked_documents)} chunks")
@@ -106,9 +103,7 @@ async def chunk_documents(args: ChunkDocumentsArgs) -> str:
             ]
 
             logger.debug(f"Writing chunks to {output_file.name}")
-            # Write to file in thread pool
-            await asyncio.to_thread(
-                output_file.write_text,
+            output_file.write_text(
                 json.dumps(payload, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )

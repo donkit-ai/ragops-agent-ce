@@ -237,7 +237,7 @@ class LLMAgent:
         if system:
             messages.append(Message(role="system", content=system))
         messages.append(Message(role="user", content=prompt))
-        return await self.arespond(messages, model=model)
+        return await self.arespond(messages)
 
     async def achat_stream(
         self, *, prompt: str, system: str | None = None, model: str | None = None
@@ -247,10 +247,10 @@ class LLMAgent:
         if system:
             messages.append(Message(role="system", content=system))
         messages.append(Message(role="user", content=prompt))
-        async for chunk in self.arespond_stream(messages, model=model):
+        async for chunk in self.arespond_stream(messages):
             yield chunk
 
-    async def arespond(self, messages: list[Message], *, model: str | None = None) -> str:
+    async def arespond(self, messages: list[Message]) -> str:
         """Perform a single assistant turn given an existing message history.
 
         This method mutates the provided messages list by appending tool results as needed.
@@ -281,9 +281,7 @@ class LLMAgent:
 
         return ""
 
-    async def arespond_stream(
-        self, messages: list[Message], *, model: str | None = None
-    ) -> AsyncIterator[StreamEvent]:
+    async def arespond_stream(self, messages: list[Message]) -> AsyncIterator[StreamEvent]:
         """Perform a single assistant turn with streaming output.
 
         This method mutates the provided messages list by appending tool results as needed.

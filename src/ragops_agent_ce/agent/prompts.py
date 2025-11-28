@@ -414,7 +414,7 @@ ALWAYS use verified tool data only.
 DEBUG_INSTRUCTIONS = """
 WE NOW IN DEBUG MODE!
 user is a developer. Follow all his instructions accurately. 
-Ever use one tool at moment then stop.
+Use one tool at moment then stop.
 """
 
 

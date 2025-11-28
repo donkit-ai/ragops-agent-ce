@@ -440,20 +440,9 @@ class SetupWizard:
         """Configure optional settings."""
         console.print("[bold]Step 3:[/bold] Optional settings\n")
 
-        # Log level
-        configure_log = interactive_confirm("Configure log level?", default=False)
-        if configure_log:
-            # Use interactive select for log level
-            log_level = interactive_select(
-                choices=["DEBUG", "INFO", "WARNING", "ERROR"], title="Select log level"
-            )
-            if log_level:
-                self.config["RAGOPS_LOG_LEVEL"] = log_level
-                console.print(f"\n✓ Log level: [green]{log_level}[/green]\n")
-            else:
-                console.print("[dim]Using default log level: ERROR[/dim]\n")
-        else:
-            console.print("[dim]Using default log level: ERROR[/dim]\n")
+        # Always use ERROR log level by default
+        self.config["RAGOPS_LOG_LEVEL"] = "ERROR"
+        console.print("[dim]Using default log level: ERROR[/dim]\n")
 
     def save_config(self) -> bool:
         """Save configuration to .env file."""

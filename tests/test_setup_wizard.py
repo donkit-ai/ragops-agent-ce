@@ -377,26 +377,11 @@ def test_openai_custom_url_format_validation(
 # ============================================================================
 
 
-@patch("ragops_agent_ce.setup_wizard.interactive_confirm")
-def test_configure_optional_settings_with_log_level(
-    mock_confirm: MagicMock, wizard: SetupWizard
-) -> None:
-    """Test optional settings configuration with log level."""
-    mock_confirm.return_value = True
-
-    with patch("ragops_agent_ce.setup_wizard.interactive_select", return_value="DEBUG"):
-        wizard._configure_optional_settings()
-
-    assert wizard.config["RAGOPS_LOG_LEVEL"] == "DEBUG"
-
-
-@patch("ragops_agent_ce.setup_wizard.interactive_confirm")
-def test_configure_optional_settings_skip(mock_confirm: MagicMock, wizard: SetupWizard) -> None:
-    """Test optional settings configuration skipped."""
-    mock_confirm.return_value = False
-
+def test_configure_optional_settings(wizard: SetupWizard) -> None:
+    """Test optional settings configuration (no interactive settings anymore)."""
     wizard._configure_optional_settings()
 
+    # Log level is not set in config - uses default ERROR
     assert "RAGOPS_LOG_LEVEL" not in wizard.config
 
 

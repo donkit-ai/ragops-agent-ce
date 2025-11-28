@@ -386,7 +386,7 @@ async def _astart_repl(
                     # Temporary message shown only during execution
                     temp_executing = ""
                     # Stream events - process content and tool calls
-                    async for event in agent.arespond_stream(history, model=model):
+                    async for event in agent.arespond_stream(history):
                         reply, display_content, temp_executing = mcp_handler.process_stream_event(
                             event,
                             history,
@@ -433,7 +433,7 @@ async def _astart_repl(
                 # Add placeholder
                 response_index = render_helper.start_agent_placeholder()
                 try:
-                    reply = await agent.arespond(history, model=model)
+                    reply = await agent.arespond(history)
                     if reply:
                         history.append(Message(role="assistant", content=reply))
                         # Replace placeholder with actual response
