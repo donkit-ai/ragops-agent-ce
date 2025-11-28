@@ -29,7 +29,6 @@ from typing import Literal, Self
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field, model_validator
-
 from ragops_agent_ce.schemas.config_schemas import RagConfig
 
 # Package root (where compose files are stored)
