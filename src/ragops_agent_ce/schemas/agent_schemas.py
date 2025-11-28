@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 
-from ragops_agent_ce.llm.base import LLMProvider
+from donkit.llm import LLMModelAbstract
 
 
 @dataclass
 class AgentSettings:
-    llm_provider: LLMProvider
+    llm_provider: LLMModelAbstract
     model: str | None

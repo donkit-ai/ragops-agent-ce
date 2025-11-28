@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 
+from donkit.llm import Message
 from rich.markup import escape
 
 from ragops_agent_ce import texts
-from ragops_agent_ce.agent.agent import EventType
-from ragops_agent_ce.agent.agent import StreamEvent
-from ragops_agent_ce.checklist_manager import get_active_checklist_text
-from ragops_agent_ce.checklist_manager import handle_checklist_tool_event
+from ragops_agent_ce.agent.agent import EventType, StreamEvent
+from ragops_agent_ce.checklist_manager import get_active_checklist_text, handle_checklist_tool_event
 from ragops_agent_ce.display import ScreenRenderer
-from ragops_agent_ce.llm.types import Message
 from ragops_agent_ce.schemas.agent_schemas import AgentSettings
 
 

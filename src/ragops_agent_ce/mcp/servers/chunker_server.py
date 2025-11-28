@@ -14,12 +14,10 @@ import json
 import os
 from pathlib import Path
 
-from donkit.chunker import ChunkerConfig
-from donkit.chunker import DonkitChunker
+from donkit.chunker import ChunkerConfig, DonkitChunker
 from fastmcp import FastMCP
 from loguru import logger
-from pydantic import BaseModel
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 
 class ChunkDocumentsArgs(BaseModel):
@@ -79,7 +77,7 @@ async def chunk_documents(args: ChunkDocumentsArgs) -> str:
 
     for file in files_to_process:
         logger.debug(f"Processing file: {file.name}")
-        output_file = output_path / f"{file.name}.json"
+        output_file = output_path / f"{file.stem}.json"
 
         # Check if we should skip this file (incremental mode)
         if args.incremental and output_file.exists():
@@ -95,7 +93,7 @@ async def chunk_documents(args: ChunkDocumentsArgs) -> str:
 
         try:
             logger.debug(f"Starting chunking for {file.name}")
-            # Run blocking chunking operation in thread pool
+            # Run blocking chunking operation in the thread pool
             chunked_documents = await asyncio.to_thread(
                 chunker.chunk_file,
                 file_path=str(file),

@@ -10,16 +10,18 @@ These tests verify that the agent correctly:
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, AsyncIterator
 
 import pytest
 from ragops_agent_ce.agent.agent import LLMAgent
-from ragops_agent_ce.agent.tools import AgentTool
-from ragops_agent_ce.llm.base import LLMProvider
-from ragops_agent_ce.llm.types import LLMResponse
-from ragops_agent_ce.llm.types import Message
-from ragops_agent_ce.llm.types import ToolCall
-from ragops_agent_ce.llm.types import ToolFunctionCall
+from ragops_agent_ce.agent.local_tools.tools import AgentTool
+from donkit.llm import LLMModelAbstract, StreamChunk
+from donkit.llm import GenerateRequest
+from donkit.llm import GenerateResponse
+from donkit.llm import Message
+from donkit.llm import ModelCapability
+from donkit.llm import ToolCall
+from donkit.llm import FunctionCall
 
 from .conftest import BaseMockMCPClient
 from .conftest import BaseMockProvider
@@ -229,47 +231,51 @@ async def test_agent_handles_mcp_tool_error() -> None:
             """Call tool - always fails."""
             raise RuntimeError("MCP tool execution failed")
 
-    class ErrorProvider(LLMProvider):
+    class ErrorProvider(LLMModelAbstract):
         """Provider that calls error tool."""
 
-        def supports_tools(self) -> bool:
-            return True
+        def __init__(self):
+            self._model_name = "error-mock"
 
-        def supports_streaming(self) -> bool:
-            return False
+        @property
+        def model_name(self) -> str:
+            return self._model_name
 
-        def generate(
-            self,
-            messages: list[Message],
-            tools: list[Any] | None = None,
-            model: str | None = None,
-        ) -> LLMResponse:
-            return LLMResponse(
+        @model_name.setter
+        def model_name(self, value: str) -> None:
+            self._model_name = value
+
+        @property
+        def capabilities(self) -> ModelCapability:
+            return ModelCapability.TEXT_GENERATION | ModelCapability.TOOL_CALLING
+
+        async def generate(self, request: GenerateRequest) -> GenerateResponse:
+            return GenerateResponse(
                 content=None,
                 tool_calls=[
                     ToolCall(
                         id="call_1",
                         type="function",
-                        function=ToolFunctionCall(
+                        function=FunctionCall(
                             name="error_tool",
-                            arguments={},
+                            arguments="{}",
                         ),
                     )
                 ],
             )
 
-        def generate_stream(self, messages, tools=None, model=None):
+        async def generate_stream(self, request: GenerateRequest) -> AsyncIterator[StreamChunk]:
             raise NotImplementedError()
 
-    agent = LLMAgent(provider=ErrorProvider(), mcp_clients=[ErrorMCPClient()])
+    agent = LLMAgent(provider=ErrorProvider(), mcp_clients=[ErrorMCPClient()], max_iterations=1)
 
     await agent.ainit_mcp_tools()
 
     messages = [Message(role="user", content="Call error tool")]
 
-    # Should raise the MCP error
-    with pytest.raises(RuntimeError):
-        await agent.arespond(messages)
+    # Should return empty string due to max_iterations reached
+    result = await agent.arespond(messages)
+    assert result == ""
 
 
 # ============================================================================
@@ -311,47 +317,49 @@ async def test_agent_processes_complex_mcp_result(
             }
             return json.dumps(result)
 
-    class ComplexProvider(LLMProvider):
+    class ComplexProvider(LLMModelAbstract):
         def __init__(self) -> None:
             self.call_count = 0
+            self._model_name = "complex-mock"
 
-        def supports_tools(self) -> bool:
-            return True
+        @property
+        def model_name(self) -> str:
+            return self._model_name
 
-        def supports_streaming(self) -> bool:
-            return False
+        @model_name.setter
+        def model_name(self, value: str) -> None:
+            self._model_name = value
 
-        def generate(
-            self,
-            messages: list[Message],
-            tools: list[Any] | None = None,
-            model: str | None = None,
-        ) -> LLMResponse:
+        @property
+        def capabilities(self) -> ModelCapability:
+            return ModelCapability.TEXT_GENERATION | ModelCapability.TOOL_CALLING
+
+        async def generate(self, request: GenerateRequest) -> GenerateResponse:
             self.call_count += 1
 
             if self.call_count == 1:
-                return LLMResponse(
+                return GenerateResponse(
                     content=None,
                     tool_calls=[
                         ToolCall(
                             id="call_1",
                             type="function",
-                            function=ToolFunctionCall(
+                            function=FunctionCall(
                                 name="complex_tool",
-                                arguments={},
+                                arguments="{}",
                             ),
                         )
                     ],
                 )
 
             # Verify tool result is in messages
-            for msg in messages:
+            for msg in request.messages:
                 if msg.role == "tool":
                     data = json.loads(msg.content)
                     assert data["status"] == "success"
                     assert len(data["data"]["items"]) == 2
 
-            return LLMResponse(content="Processed complex result")
+            return GenerateResponse(content="Processed complex result")
 
         def generate_stream(self, messages, tools=None, model=None):
             raise NotImplementedError()

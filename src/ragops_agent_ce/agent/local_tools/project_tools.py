@@ -4,15 +4,15 @@ import json
 import shutil
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from ..db import close
-from ..db import kv_all_by_prefix
-from ..db import kv_delete
-from ..db import kv_get
-from ..db import kv_set
-from ..db import open_db
-from ..schemas.config_schemas import RagConfig
+from ragops_agent_ce.db import close
+from ragops_agent_ce.db import kv_all_by_prefix
+from ragops_agent_ce.db import kv_delete
+from ragops_agent_ce.db import kv_get
+from ragops_agent_ce.db import kv_set
+from ragops_agent_ce.db import open_db
+from ragops_agent_ce.schemas.config_schemas import RagConfig
 from .tools import AgentTool
 
 
@@ -519,15 +519,14 @@ def tool_delete_project() -> AgentTool:
                 except Exception as e:
                     return f"Warning: Deleted from DB but failed to delete directory: {e}"
 
-            # Delete checklist file
-            checklist_file = Path(f"ragops_checklists/checklist_{project_id}.json")
-            if checklist_file.exists():
-                try:
-                    checklist_file.unlink()
-                except Exception:
-                    pass  # Optional cleanup
+            # Delete checklist from database (if exists)
+            checklist_key = _checklist_key(f"checklist_{project_id}")
+            try:
+                kv_delete(db, checklist_key)
+            except Exception:
+                pass  # Optional cleanup - checklist might not exist
 
-            return f"Successfully deleted project '{project_id}' and all related files."
+            return f"Successfully deleted project '{project_id}' and all related data."
         finally:
             close(db)
 

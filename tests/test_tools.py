@@ -10,13 +10,13 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-from ragops_agent_ce.agent.tools import tool_db_get
-from ragops_agent_ce.agent.tools import tool_grep
-from ragops_agent_ce.agent.tools import tool_interactive_user_choice
-from ragops_agent_ce.agent.tools import tool_interactive_user_confirm
-from ragops_agent_ce.agent.tools import tool_list_directory
-from ragops_agent_ce.agent.tools import tool_read_file
-from ragops_agent_ce.agent.tools import tool_time_now
+from ragops_agent_ce.agent.local_tools.tools import tool_db_get
+from ragops_agent_ce.agent.local_tools.tools import tool_grep
+from ragops_agent_ce.agent.local_tools.tools import tool_interactive_user_choice
+from ragops_agent_ce.agent.local_tools.tools import tool_interactive_user_confirm
+from ragops_agent_ce.agent.local_tools.tools import tool_list_directory
+from ragops_agent_ce.agent.local_tools.tools import tool_read_file
+from ragops_agent_ce.agent.local_tools.tools import tool_time_now
 from ragops_agent_ce.db import DB
 from ragops_agent_ce.db import close
 from ragops_agent_ce.db import kv_set
@@ -329,7 +329,7 @@ def test_tool_db_get_existing_key(db: DB, temp_db_path: Path) -> None:
     kv_set(db, "test_key", "test_value")
 
     # Patch open_db to return our test db
-    with patch("ragops_agent_ce.agent.tools.open_db") as mock_open_db:
+    with patch("ragops_agent_ce.agent.local_tools.tools.open_db") as mock_open_db:
         mock_open_db.return_value = db
         tool = tool_db_get()
         result = tool.handler({"key": "test_key"})
@@ -339,7 +339,7 @@ def test_tool_db_get_existing_key(db: DB, temp_db_path: Path) -> None:
 
 def test_tool_db_get_nonexistent_key(db: DB) -> None:
     """Test getting a non-existent key returns empty string."""
-    with patch("ragops_agent_ce.agent.tools.open_db") as mock_open_db:
+    with patch("ragops_agent_ce.agent.local_tools.tools.open_db") as mock_open_db:
         mock_open_db.return_value = db
         tool = tool_db_get()
         result = tool.handler({"key": "nonexistent"})
@@ -349,7 +349,7 @@ def test_tool_db_get_nonexistent_key(db: DB) -> None:
 
 def test_tool_db_get_no_key() -> None:
     """Test db_get without key parameter."""
-    with patch("ragops_agent_ce.agent.tools.open_db") as mock_open_db:
+    with patch("ragops_agent_ce.agent.local_tools.tools.open_db") as mock_open_db:
         mock_db = Mock()
         mock_open_db.return_value = mock_db
         tool = tool_db_get()
@@ -365,7 +365,7 @@ def test_tool_db_get_no_key() -> None:
 
 def test_tool_interactive_user_choice_valid_selection() -> None:
     """Test interactive user choice with valid selection."""
-    with patch("ragops_agent_ce.agent.tools.interactive_select") as mock_select:
+    with patch("ragops_agent_ce.agent.local_tools.tools.interactive_select") as mock_select:
         mock_select.return_value = "option2"
         tool = tool_interactive_user_choice()
         result_str = tool.handler(
@@ -382,7 +382,7 @@ def test_tool_interactive_user_choice_valid_selection() -> None:
 
 def test_tool_interactive_user_choice_no_options() -> None:
     """Test interactive user choice with no options."""
-    with patch("ragops_agent_ce.agent.tools.interactive_select") as mock_select:
+    with patch("ragops_agent_ce.agent.local_tools.tools.interactive_select") as mock_select:
         tool = tool_interactive_user_choice()
         result_str = tool.handler({"title": "Choose", "choices": []})
         result = json.loads(result_str)
@@ -392,7 +392,7 @@ def test_tool_interactive_user_choice_no_options() -> None:
 
 def test_tool_interactive_user_choice_cancelled() -> None:
     """Test interactive user choice when user cancels."""
-    with patch("ragops_agent_ce.agent.tools.interactive_select") as mock_select:
+    with patch("ragops_agent_ce.agent.local_tools.tools.interactive_select") as mock_select:
         mock_select.return_value = None
         tool = tool_interactive_user_choice()
         result_str = tool.handler(
@@ -414,7 +414,7 @@ def test_tool_interactive_user_choice_cancelled() -> None:
 
 def test_tool_interactive_user_confirm_yes() -> None:
     """Test interactive user confirm with yes."""
-    with patch("ragops_agent_ce.agent.tools.interactive_confirm") as mock_confirm:
+    with patch("ragops_agent_ce.agent.local_tools.tools.interactive_confirm") as mock_confirm:
         mock_confirm.return_value = True
         tool = tool_interactive_user_confirm()
         result_str = tool.handler({"question": "Continue?"})
@@ -426,7 +426,7 @@ def test_tool_interactive_user_confirm_yes() -> None:
 
 def test_tool_interactive_user_confirm_no() -> None:
     """Test interactive user confirm with no."""
-    with patch("ragops_agent_ce.agent.tools.interactive_confirm") as mock_confirm:
+    with patch("ragops_agent_ce.agent.local_tools.tools.interactive_confirm") as mock_confirm:
         mock_confirm.return_value = False
         tool = tool_interactive_user_confirm()
         result_str = tool.handler({"question": "Continue?"})
@@ -438,7 +438,7 @@ def test_tool_interactive_user_confirm_no() -> None:
 
 def test_tool_interactive_user_confirm_cancelled() -> None:
     """Test interactive user confirm when cancelled."""
-    with patch("ragops_agent_ce.agent.tools.interactive_confirm") as mock_confirm:
+    with patch("ragops_agent_ce.agent.local_tools.tools.interactive_confirm") as mock_confirm:
         mock_confirm.return_value = None
         tool = tool_interactive_user_confirm()
         result_str = tool.handler({"question": "Continue?"})

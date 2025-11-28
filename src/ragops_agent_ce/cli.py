@@ -8,36 +8,36 @@ import shlex
 import time
 
 import typer
+from donkit.llm import Message, ModelCapability
 from loguru import logger
 from rich.console import Console
 
-from ragops_agent_ce import __version__
-from ragops_agent_ce import texts
-from ragops_agent_ce.agent.agent import LLMAgent
-from ragops_agent_ce.agent.agent import default_tools
-from ragops_agent_ce.agent.prompts import OPENAI_SYSTEM_PROMPT
-from ragops_agent_ce.agent.prompts import VERTEX_SYSTEM_PROMPT
-from ragops_agent_ce.cli_helpers import format_model_choices
-from ragops_agent_ce.cli_helpers import get_available_models
-from ragops_agent_ce.cli_helpers import select_provider_interactively
-from ragops_agent_ce.cli_helpers import validate_model_choice
+from ragops_agent_ce import __version__, texts
+from ragops_agent_ce.agent.agent import LLMAgent, default_tools
+from ragops_agent_ce.agent.prompts import get_prompt
+from ragops_agent_ce.cli_helpers import (
+    format_model_choices,
+    get_available_models,
+    select_provider_interactively,
+    validate_model_choice,
+)
 from ragops_agent_ce.config import load_settings
 from ragops_agent_ce.display import ScreenRenderer
-from ragops_agent_ce.interactive_input import get_user_input
-from ragops_agent_ce.interactive_input import interactive_confirm
-from ragops_agent_ce.interactive_input import interactive_select
+from ragops_agent_ce.interactive_input import (
+    get_user_input,
+    interactive_confirm,
+    interactive_select,
+)
 from ragops_agent_ce.llm.provider_factory import get_provider
-from ragops_agent_ce.llm.types import Message
 from ragops_agent_ce.logging_config import setup_logging
 from ragops_agent_ce.mcp.client import MCPClient
-from ragops_agent_ce.model_selector import PROVIDERS
-from ragops_agent_ce.model_selector import save_model_selection
-from ragops_agent_ce.model_selector import select_model_at_startup
-from ragops_agent_ce.prints import RAGOPS_LOGO_ART
-from ragops_agent_ce.prints import RAGOPS_LOGO_TEXT
-from ragops_agent_ce.repl_helpers import MCPEventHandler
-from ragops_agent_ce.repl_helpers import build_stream_render_helper
-from ragops_agent_ce.repl_helpers import format_timestamp
+from ragops_agent_ce.model_selector import PROVIDERS, save_model_selection, select_model_at_startup
+from ragops_agent_ce.prints import RAGOPS_LOGO_ART, RAGOPS_LOGO_TEXT
+from ragops_agent_ce.repl_helpers import (
+    MCPEventHandler,
+    build_stream_render_helper,
+    format_timestamp,
+)
 from ragops_agent_ce.schemas.agent_schemas import AgentSettings
 from ragops_agent_ce.setup_wizard import run_setup_if_needed
 
@@ -118,7 +118,7 @@ def main(
                 "vertex": "gemini-2.5-flash",
                 "ollama": "llama3.1",
                 "openrouter": "openai/gpt-4o-mini",
-                "donkit": "gpt5",
+                "donkit": "donkit-fast",
                 "anthropic": "claude-3-5-sonnet-20241022",
                 "mock": "gpt-4o-mini",
             }
@@ -126,12 +126,9 @@ def main(
             console.print(
                 f"[yellow]No model selected. Using default: [cyan]{model}[/cyan][/yellow]"
             )
-
         asyncio.run(
             _astart_repl(
-                system=system or VERTEX_SYSTEM_PROMPT
-                if provider == "vertex" or provider == "vertexai"
-                else OPENAI_SYSTEM_PROMPT,
+                system=get_prompt(provider, debug=load_settings().log_level == "DEBUG"),
                 model=model,
                 provider=provider,
                 mcp_commands=DEFAULT_MCP_COMMANDS,
@@ -260,15 +257,12 @@ async def _astart_repl(
         user_input = get_user_input()
         if not user_input:
             continue
-
         if user_input == ":help":
             transcript += texts.HELP_COMMANDS
             continue
-
         if user_input == ":clear":
             transcript.clear()
             continue
-
         if user_input == ":provider":
             render_helper.render_current_screen()
             new_provider = await select_provider_interactively(
@@ -282,17 +276,13 @@ async def _astart_repl(
                 tools=tools,
                 mcp_clients=mcp_clients,
             )
-
             if new_provider is None:
                 render_helper.render_current_screen()
                 continue
-
             transcript.extend(new_provider.messages)
-
             if new_provider.cancelled:
                 render_helper.render_current_screen()
                 continue
-
             provider = new_provider.provider
             prov = new_provider.prov
             agent = new_provider.agent
@@ -301,9 +291,7 @@ async def _astart_repl(
             model = new_provider.model
             mcp_handler.agent_settings = agent_settings
             mcp_handler.clear_progress()
-
             render_helper.render_current_screen()
-
             if new_provider.prompt_model_selection and provider:
                 # First ask if user wants to select a different model
                 current_model_display = agent_settings.model or model or "default"
@@ -311,19 +299,15 @@ async def _astart_repl(
                     question=f"Current model: {current_model_display}. Select a different model?",
                     default=False,
                 )
-
                 if want_to_change_model:
                     models = get_available_models(prov, provider)
-
                     if models:
                         choices = format_model_choices(models, agent_settings.model or model)
                         choices.append(texts.MODEL_SELECT_SKIP)
-
                         title = texts.MODEL_SELECT_TITLE.format(
                             provider=PROVIDERS[provider]["display"]
                         )
                         selected_choice = interactive_select(choices, title=title)
-
                         if selected_choice and selected_choice != texts.MODEL_SELECT_SKIP:
                             new_model = selected_choice.split(" [")[0].strip()
                             success, messages = validate_model_choice(
@@ -338,16 +322,13 @@ async def _astart_repl(
                         transcript.append(texts.MODEL_NO_AVAILABLE)
                 else:
                     transcript.append(f"[dim]Keeping current model: {current_model_display}[/dim]")
-
             render_helper.render_current_screen()
             continue
-
         if user_input == ":model":
             # Select model interactively
             render_helper.render_current_screen()
             current_provider_name = provider or settings.llm_provider or "openai"
             current_model_name = agent_settings.model or model
-
             models = get_available_models(prov, current_provider_name)
             if not models:
                 # If no predefined models, ask user to input
@@ -358,20 +339,15 @@ async def _astart_repl(
                 )
                 render_helper.render_current_screen()
                 continue
-
             # Build choices list
             choices = format_model_choices(models, current_model_name)
-
             # Add "Custom" option
             choices.append("Custom (enter manually)")
-
             title = f"Select Model for {current_provider_name}"
             selected_choice = interactive_select(choices, title=title)
-
             if selected_choice is None:
                 render_helper.render_current_screen()
                 continue
-
             if selected_choice == "Custom (enter manually)":
                 transcript.append(
                     "[bold yellow]Please specify model name in .env file or "
@@ -379,10 +355,8 @@ async def _astart_repl(
                 )
                 render_helper.render_current_screen()
                 continue
-
             # Extract model name (remove "← Current" if present)
             new_model = selected_choice.split(" [")[0].strip()
-
             success, messages = validate_model_choice(
                 prov, current_provider_name, new_model, agent_settings
             )
@@ -391,26 +365,21 @@ async def _astart_repl(
                 model = new_model
             render_helper.render_current_screen()
             continue
-
         if user_input in {":q", ":quit", ":exit", "exit", "quit"}:
             transcript.append("[Bye]")
             render_helper.render_current_screen()
             renderer.render_goodbye_screen()
             break
-
         render_helper.append_user_line(user_input)
         render_helper.render_current_screen()
-
         try:
             history.append(Message(role="user", content=user_input))
             # Use streaming if provider supports it
-            if prov.supports_streaming():
+            if prov.supports_capability(ModelCapability.STREAMING):
                 reply = ""
                 interrupted = False
-
                 # Add placeholder to transcript
                 response_index = render_helper.start_agent_placeholder()
-
                 try:
                     # Accumulate everything in display order
                     display_content = ""
@@ -445,7 +414,6 @@ async def _astart_repl(
                     logger.error(f"Error during streaming: {e}", exc_info=True)
                     render_helper.render_current_screen()
                     mcp_handler.clear_progress()
-
                 # Add to history if we got a response
                 if reply and not interrupted:
                     history.append(Message(role="assistant", content=reply))
@@ -464,7 +432,6 @@ async def _astart_repl(
                 # Fall back to non-streaming mode
                 # Add placeholder
                 response_index = render_helper.start_agent_placeholder()
-
                 try:
                     reply = await agent.arespond(history, model=model)
                     if reply:

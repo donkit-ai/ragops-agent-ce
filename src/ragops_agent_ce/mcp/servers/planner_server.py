@@ -13,9 +13,8 @@ import re
 from typing import Self
 
 from fastmcp import FastMCP
-from pydantic import BaseModel
-from pydantic import Field
-from pydantic import model_validator
+from pydantic import BaseModel, Field, model_validator
+
 from ragops_agent_ce.schemas.config_schemas import RagConfig
 
 

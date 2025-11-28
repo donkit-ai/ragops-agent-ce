@@ -7,13 +7,18 @@ from pathlib import Path
 from typing import Any
 from typing import Callable
 
-from ..db import kv_get
-from ..db import migrate
-from ..db import open_db
-from ..interactive_input import interactive_confirm
-from ..interactive_input import interactive_select
-from ..llm import ToolFunction
-from ..llm import ToolSpec
+from ragops_agent_ce.credential_checker import (
+    check_provider_credentials,
+    get_available_providers,
+    get_recommended_config,
+)
+from ragops_agent_ce.db import kv_get
+from ragops_agent_ce.db import migrate
+from ragops_agent_ce.db import open_db
+from ragops_agent_ce.interactive_input import interactive_confirm
+from ragops_agent_ce.interactive_input import interactive_select
+from donkit.llm import FunctionDefinition
+from donkit.llm import Tool
 
 
 class AgentTool:
@@ -29,9 +34,9 @@ class AgentTool:
         self.parameters = parameters
         self.handler = handler
 
-    def to_tool_spec(self) -> ToolSpec:
-        return ToolSpec(
-            function=ToolFunction(
+    def to_tool_spec(self) -> Tool:
+        return Tool(
+            function=FunctionDefinition(
                 name=self.name, description=self.description, parameters=self.parameters
             )
         )
@@ -78,7 +83,7 @@ def tool_db_get() -> AgentTool:
 
 def tool_list_directory() -> AgentTool:
     def _handler(args: dict[str, Any]) -> str:
-        path_str = str(args.get("path", "."))
+        path_str = str(args.get("path", ".."))
         try:
             path = Path(path_str).expanduser().resolve()
             if not path.exists():
@@ -228,7 +233,7 @@ def tool_grep() -> AgentTool:
     def _handler(args: dict[str, Any]) -> str:
         pattern = args.get("pattern", "")
         include = args.get("include", "")
-        path = args.get("path", ".")
+        path = args.get("path", "..")
 
         if not pattern:
             return json.dumps({"error": "Pattern is required for grep."})
@@ -457,45 +462,65 @@ def tool_interactive_user_confirm() -> AgentTool:
 def tool_quick_start_rag_config() -> AgentTool:
     """Tool for quickly setting up RAG with recommended settings."""
 
-    def _handler(args: dict[str, Any]) -> str:
+    def _handler() -> str:
         # Ask user if they want to use quick start or customize
         use_quick_start = interactive_confirm(
             question="Use recommended Quick Start settings? (You can customize later)",
             default=True
         )
 
+        available_providers = get_available_providers()
+        recommended = get_recommended_config()
+
         if use_quick_start is None:
-            return json.dumps({"cancelled": True, "use_quick_start": None})
+            return json.dumps(
+                {
+                    "cancelled": True,
+                    "use_quick_start": None,
+                    "message": f"Available providers in env settings - {available_providers}\n"
+                               f"You can recommend only this providers in interactive_user_choice"
+                }
+            )
 
         if not use_quick_start:
             return json.dumps({
                 "cancelled": False,
                 "use_quick_start": False,
-                "message": "User wants to customize. Please ask for each setting individually."
+                "message":
+                    "User wants to customize. Please ask for each setting individually."
+                    f"Available providers in env settings - {available_providers}\n"
+                    f"You can recommend only this providers in interactive_user_choice"
             })
+
+        # Get available providers and recommended config
 
         # Quick start confirmed - return recommended config template
         quick_config = {
             "use_quick_start": True,
-            "message": "Quick Start configuration selected. Use these recommended settings.",
+            "message":
+                "Quick Start configuration selected. Use these recommended settings based on available providers.",
             "recommended_config": {
-                "embedder_provider": "openai",
-                "embedder_model": "text-embedding-3-small",
-                "generation_provider": "openai",
-                "generation_model": "gpt-4o-mini",
+                "embedder_provider": recommended["embedder_provider"],
+                "embedder_model": recommended["embedder_model"],
+                "generation_provider": recommended["generation_provider"],
+                "generation_model": recommended["generation_model"],
                 "vector_db": "qdrant",
                 "read_format": "json",
                 "split_type": "semantic",
-                "chunk_size": 1000,
-                "chunk_overlap": 100,
+                "chunk_size": 500,
+                "chunk_overlap": 0,
                 "ranker": False,
                 "partial_search": True,
                 "query_rewrite": True,
                 "composite_query_detection": False
             },
-            "note": "These are production-ready defaults. Users can modify config later if needed."
+            "available_providers": available_providers,
+            "note":
+                (
+                    "Configuration automatically selected based on available credentials. "
+                    "User can modify config later if needed."
+                )
         }
-
         return json.dumps(quick_config, ensure_ascii=False)
 
     return AgentTool(

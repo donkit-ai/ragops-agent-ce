@@ -15,13 +15,10 @@ Shared Models:
     - RagConfig: Unified RAG configuration (base schema)
 """
 
-from enum import StrEnum
-from enum import auto
+from enum import StrEnum, auto
 from typing import Literal
 
-from pydantic import BaseModel
-from pydantic import Field
-from pydantic import model_validator
+from pydantic import BaseModel, Field, model_validator
 
 # ============================================================================
 # Enums
@@ -50,6 +47,7 @@ class EmbedderType(StrEnum):
     VERTEX = auto()
     AZURE_OPENAI = auto()
     OLLAMA = auto()
+    DONKIT = auto()
 
 
 class GenerationModelType(StrEnum):
@@ -60,6 +58,7 @@ class GenerationModelType(StrEnum):
     AZURE_OPENAI = auto()
     # CLAUDE = auto()
     VERTEX = auto()
+    DONKIT = auto()
 
 
 class ReadingFormat(StrEnum):
@@ -109,6 +108,8 @@ MODEL_ENV_MAPPING = """
         for ollama
             - RAGOPS_OLLAMA_BASE_URL
             - RAGOPS_OLLAMA_EMBEDDINGS_MODEL (for embeddings)
+        for donkit
+            - RAGOPS_DONKIT_API_KEY
 """
 
 GENERATION_MODEL_TYPE_DESCRIPTION = f"""
@@ -141,6 +142,7 @@ class Embedder(BaseModel):
             "For Vertex: uses default model. "
             "For Azure OpenAI: deployment name or text-embedding-ada-002. "
             "For Ollama: embeddinggemma, qwen3-embedding, all-minilm"
+            "For Donkit: default"
             "If not specified, uses provider defaults."
         ),
     )
@@ -228,7 +230,14 @@ class RagConfig(BaseModel):
     generation_model_type: GenerationModelType = Field(
         description=GENERATION_MODEL_TYPE_DESCRIPTION
     )
-    generation_model_name: str = Field(
-        description="Generation model name. must be model of selected generation model type"
+    generation_model_name: str | None = Field(
+        default=None,
+        description="Generation model name. must be model of selected generation model type",
     )
     database_uri: str = Field(description="Vector database URI inside DOCKER")
+
+    @model_validator(mode="after")
+    def validate_database_uri(self) -> "RagConfig":
+        if "localhost" in self.database_uri:
+            raise ValueError("Database URI must be inside DOCKER")
+        return self

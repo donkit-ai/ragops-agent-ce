@@ -2,13 +2,14 @@
 Unified MCP Server - combines all RagOps MCP servers into one.
 
 This server uses FastMCP's mounting feature to combine multiple servers:
-- checklist: Task checklist management
 - chunker: Document chunking utilities
 - compose: Docker compose service management
 - planner: RAG config planning
 - query: RAG query execution
 - reader: Document reading/parsing
 - vectorstore: Vector store loading
+
+Note: Checklist management is now handled by built-in agent tools, not MCP.
 
 Usage:
     python -m ragops_agent_ce.mcp.servers.donkit_ragops_mcp
@@ -36,8 +37,7 @@ warnings.simplefilter("ignore", DeprecationWarning)
 
 from fastmcp import FastMCP
 
-# Import all subservers
-from .checklist_server import server as checklist_server
+# Import all subservers (checklist removed - now handled by built-in agent tools)
 from .chunker_server import server as chunker_server
 from .compose_manager_server import server as compose_server
 from .planner_server import server as planner_server
@@ -50,7 +50,6 @@ unified_server = FastMCP(name="donkit-ragops-mcp")
 
 # Mount all servers with appropriate prefixes
 # Using mount() for live linking - servers remain independent
-unified_server.mount(checklist_server, prefix="checklist")
 unified_server.mount(chunker_server, prefix="chunker")
 unified_server.mount(compose_server, prefix="compose")
 unified_server.mount(planner_server, prefix="planner")

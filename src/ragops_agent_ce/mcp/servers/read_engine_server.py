@@ -17,11 +17,9 @@ import unicodedata
 from pathlib import Path
 
 from donkit.read_engine.read_engine import DonkitReader
-from fastmcp import Context
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 from loguru import logger
-from pydantic import BaseModel
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 
 class ProcessDocumentsArgs(BaseModel):

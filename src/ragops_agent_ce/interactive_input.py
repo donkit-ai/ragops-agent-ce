@@ -16,8 +16,7 @@ from rich.panel import Panel
 from rich.style import Style
 from rich.text import Text
 
-from .command_palette import CommandPalette
-from .command_palette import CommandRegistry
+from .command_palette import CommandPalette, CommandRegistry
 
 if TYPE_CHECKING:
     import termios

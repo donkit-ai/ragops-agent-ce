@@ -15,12 +15,14 @@ from typing import Any
 
 import pytest
 from ragops_agent_ce.agent.agent import LLMAgent
-from ragops_agent_ce.agent.tools import AgentTool
-from ragops_agent_ce.llm.base import LLMProvider
-from ragops_agent_ce.llm.types import LLMResponse
-from ragops_agent_ce.llm.types import Message
-from ragops_agent_ce.llm.types import ToolCall
-from ragops_agent_ce.llm.types import ToolFunctionCall
+from ragops_agent_ce.agent.local_tools.tools import AgentTool
+from donkit.llm import LLMModelAbstract
+from donkit.llm import GenerateRequest
+from donkit.llm import GenerateResponse
+from donkit.llm import Message
+from donkit.llm import ModelCapability
+from donkit.llm import ToolCall
+from donkit.llm import FunctionCall
 
 from .conftest import BaseMockProvider
 
@@ -198,45 +200,54 @@ async def test_agent_tool_error_recovery() -> None:
         ),
     ]
 
-    class ErrorProvider(LLMProvider):
+    class ErrorProvider(LLMModelAbstract):
         """Provider that calls failing tool."""
 
-        def supports_tools(self) -> bool:
-            return True
+        def __init__(self):
+            self._model_name = "error-provider"
 
-        def supports_streaming(self) -> bool:
-            return False
+        @property
+        def model_name(self) -> str:
+            return self._model_name
 
-        def generate(
-            self,
-            messages: list[Message],
-            tools: list[Any] | None = None,
-            model: str | None = None,
-        ) -> LLMResponse:
+        @model_name.setter
+        def model_name(self, value: str) -> None:
+            self._model_name = value
+
+        @property
+        def capabilities(self) -> ModelCapability:
+            return ModelCapability.TEXT_GENERATION | ModelCapability.TOOL_CALLING
+
+        async def generate(self, request: GenerateRequest) -> GenerateResponse:
             # Call failing tool
-            return LLMResponse(
+            return GenerateResponse(
                 content=None,
                 tool_calls=[
                     ToolCall(
                         id="call_1",
                         type="function",
-                        function=ToolFunctionCall(
+                        function=FunctionCall(
                             name="failing_tool",
-                            arguments={},
+                            arguments="{}",
                         ),
                     )
                 ],
             )
 
-        def generate_stream(self, messages, tools=None, model=None):
+        async def generate_stream(self, request: GenerateRequest) -> AsyncIterator[StreamChunk]:
             raise NotImplementedError()
 
-    agent = LLMAgent(provider=ErrorProvider(), tools=tools)
+    agent = LLMAgent(provider=ErrorProvider(), tools=tools, max_iterations=1)
     messages = [Message(role="user", content="Call the failing tool")]
 
-    # Should raise the tool error
-    with pytest.raises(ValueError):
-        await agent.arespond(messages)
+    # Should return empty string due to max_iterations reached
+    result = await agent.arespond(messages)
+    assert result == ""
+
+    # Check that tool message contains error
+    assert len(messages) >= 3
+    assert messages[2].role == "tool"
+    assert "Error" in messages[2].content
 
 
 # ============================================================================
@@ -275,37 +286,39 @@ async def test_agent_tool_chaining() -> None:
         ),
     ]
 
-    class ChainProvider(LLMProvider):
+    class ChainProvider(LLMModelAbstract):
         """Provider that chains tools."""
 
         def __init__(self) -> None:
             self.call_count = 0
+            self._model_name = "chain-provider"
 
-        def supports_tools(self) -> bool:
-            return True
+        @property
+        def model_name(self) -> str:
+            return self._model_name
 
-        def supports_streaming(self) -> bool:
-            return False
+        @model_name.setter
+        def model_name(self, value: str) -> None:
+            self._model_name = value
 
-        def generate(
-            self,
-            messages: list[Message],
-            tools: list[Any] | None = None,
-            model: str | None = None,
-        ) -> LLMResponse:
+        @property
+        def capabilities(self) -> ModelCapability:
+            return ModelCapability.TEXT_GENERATION | ModelCapability.TOOL_CALLING
+
+        async def generate(self, request: GenerateRequest) -> GenerateResponse:
             self.call_count += 1
 
             # First call: use tool_1
             if self.call_count == 1:
-                return LLMResponse(
+                return GenerateResponse(
                     content=None,
                     tool_calls=[
                         ToolCall(
                             id="call_1",
                             type="function",
-                            function=ToolFunctionCall(
+                            function=FunctionCall(
                                 name="tool_1",
-                                arguments={},
+                                arguments="{}",
                             ),
                         )
                     ],
@@ -313,24 +326,24 @@ async def test_agent_tool_chaining() -> None:
 
             # Second call: use tool_2
             if self.call_count == 2:
-                return LLMResponse(
+                return GenerateResponse(
                     content=None,
                     tool_calls=[
                         ToolCall(
                             id="call_2",
                             type="function",
-                            function=ToolFunctionCall(
+                            function=FunctionCall(
                                 name="tool_2",
-                                arguments={},
+                                arguments="{}",
                             ),
                         )
                     ],
                 )
 
             # Third call: final response
-            return LLMResponse(content="Chain complete")
+            return GenerateResponse(content="Chain complete")
 
-        def generate_stream(self, messages, tools=None, model=None):
+        async def generate_stream(self, request: GenerateRequest) -> AsyncIterator[StreamChunk]:
             raise NotImplementedError()
 
     provider = ChainProvider()
@@ -390,39 +403,43 @@ async def test_agent_tool_complex_arguments() -> None:
         ),
     ]
 
-    class ComplexProvider(LLMProvider):
-        def supports_tools(self) -> bool:
-            return True
+    class ComplexProvider(LLMModelAbstract):
+        def __init__(self):
+            self._model_name = "complex-provider"
 
-        def supports_streaming(self) -> bool:
-            return False
+        @property
+        def model_name(self) -> str:
+            return self._model_name
 
-        def generate(
-            self,
-            messages: list[Message],
-            tools: list[Any] | None = None,
-            model: str | None = None,
-        ) -> LLMResponse:
-            return LLMResponse(
+        @model_name.setter
+        def model_name(self, value: str) -> None:
+            self._model_name = value
+
+        @property
+        def capabilities(self) -> ModelCapability:
+            return ModelCapability.TEXT_GENERATION | ModelCapability.TOOL_CALLING
+
+        async def generate(self, request: GenerateRequest) -> GenerateResponse:
+            return GenerateResponse(
                 content=None,
                 tool_calls=[
                     ToolCall(
                         id="call_1",
                         type="function",
-                        function=ToolFunctionCall(
+                        function=FunctionCall(
                             name="complex_tool",
-                            arguments={
+                            arguments=json.dumps({
                                 "name": "test",
                                 "count": 42,
                                 "tags": ["a", "b", "c"],
                                 "config": {"key": "value"},
-                            },
+                            }),
                         ),
                     )
                 ],
             )
 
-        def generate_stream(self, messages, tools=None, model=None):
+        async def generate_stream(self, request: GenerateRequest) -> AsyncIterator[StreamChunk]:
             raise NotImplementedError()
 
     agent = LLMAgent(provider=ComplexProvider(), tools=tools)
@@ -462,35 +479,37 @@ async def test_agent_processes_tool_results() -> None:
         ),
     ]
 
-    class TrackingProvider(LLMProvider):
+    class TrackingProvider(LLMModelAbstract):
         def __init__(self) -> None:
             self.call_count = 0
+            self._model_name = "tracking-provider"
 
-        def supports_tools(self) -> bool:
-            return True
+        @property
+        def model_name(self) -> str:
+            return self._model_name
 
-        def supports_streaming(self) -> bool:
-            return False
+        @model_name.setter
+        def model_name(self, value: str) -> None:
+            self._model_name = value
 
-        def generate(
-            self,
-            messages: list[Message],
-            tools: list[Any] | None = None,
-            model: str | None = None,
-        ) -> LLMResponse:
+        @property
+        def capabilities(self) -> ModelCapability:
+            return ModelCapability.TEXT_GENERATION | ModelCapability.TOOL_CALLING
+
+        async def generate(self, request: GenerateRequest) -> GenerateResponse:
             self.call_count += 1
 
             # First call: use tool
             if self.call_count == 1:
-                return LLMResponse(
+                return GenerateResponse(
                     content=None,
                     tool_calls=[
                         ToolCall(
                             id="call_1",
                             type="function",
-                            function=ToolFunctionCall(
+                            function=FunctionCall(
                                 name="tracking_tool",
-                                arguments={},
+                                arguments="{}",
                             ),
                         )
                     ],
@@ -498,13 +517,13 @@ async def test_agent_processes_tool_results() -> None:
 
             # Second call: process result
             # Check that tool result is in messages
-            for msg in messages:
+            for msg in request.messages:
                 if msg.role == "tool":
                     tool_results.append(msg.content)
 
-            return LLMResponse(content="Processed results")
+            return GenerateResponse(content="Processed results")
 
-        def generate_stream(self, messages, tools=None, model=None):
+        async def generate_stream(self, request: GenerateRequest) -> AsyncIterator[StreamChunk]:
             raise NotImplementedError()
 
     agent = LLMAgent(provider=TrackingProvider(), tools=tools)

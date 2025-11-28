@@ -25,13 +25,11 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Literal
-from typing import Self
+from typing import Literal, Self
 
 from fastmcp import FastMCP
-from pydantic import BaseModel
-from pydantic import Field
-from pydantic import model_validator
+from pydantic import BaseModel, Field, model_validator
+
 from ragops_agent_ce.schemas.config_schemas import RagConfig
 
 # Package root (where compose files are stored)
@@ -196,7 +194,7 @@ server = FastMCP(
 
 def generate_env_file(
     project_id: str,
-    rag_config: RagConfig | None,
+    rag_config: RagConfig,
     llm_provider: str | None,
     llm_model: str | None,
     openai_api_key: str | None,
@@ -212,9 +210,13 @@ def generate_env_file(
     ollama_api_key: str | None,
     ollama_chat_model: str | None,
     ollama_embedding_model: str | None,
+    donkit_api_key: str | None,
+    donkit_base_url: str | None,
     log_level: str | None,
 ) -> str:
     """Generate .env file content from RagConfig."""
+    if not rag_config:
+        raise ValueError("Rag_config must be provided to the env generator")
     lines = [
         "# =============================================================================",
         "# RAGOps Agent CE - Docker Compose Environment Variables",
@@ -262,6 +264,11 @@ def generate_env_file(
     lines.append(f"AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT={azure_openai_embeddings_deployment or ''}")
     lines.append("")
 
+    # Donkit
+    lines.append("# Donkit")
+    lines.append(f"DONKIT_API_KEY={donkit_api_key or ''}")
+    lines.append(f"DONKIT_BASE_URL={donkit_base_url or 'https://api.donkit.ai'}")
+
     # Vertex AI
     lines.append("# Vertex AI (Google Cloud)")
     lines.append("# Pass credentials as base64-encoded JSON")
@@ -291,14 +298,6 @@ def generate_env_file(
     lines.append("# -----------------------------------------------------------------------------")
     lines.append("")
 
-    # Database URI
-    if rag_config:
-        lines.append(f"DATABASE_URI={rag_config.database_uri}")
-    else:
-        lines.append("DATABASE_URI=http://qdrant:6333")
-    lines.append("")
-
-    # RAG Config JSON - переменная называется CONFIG в Settings
     # Encode to base64 to avoid issues with special characters in .env
     if rag_config:
         config_json = rag_config.model_dump_json()
@@ -460,6 +459,8 @@ async def init_project_compose(args: InitProjectComposeArgs) -> str:
         ollama_chat_model=os.getenv("RAGOPS_OLLAMA_CHAT_MODEL"),
         ollama_embedding_model=os.getenv("RAGOPS_OLLAMA_EMBEDDINGS_MODEL"),
         log_level=os.getenv("RAGOPS_LOG_LEVEL"),
+        donkit_api_key=os.getenv("RAGOPS_DONKIT_API_KEY"),
+        donkit_base_url=os.getenv("RAGOPS_DONKIT_BASE_URL"),
     )
     env_file = compose_target / ".env"
     env_file.write_text(env_content)
