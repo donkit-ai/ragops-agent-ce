@@ -9,15 +9,14 @@ import os
 from pathlib import Path
 
 from dotenv import dotenv_values
+from loguru import logger
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Confirm
-from rich.prompt import Prompt
+from rich.prompt import Confirm, Prompt
 from rich.text import Text
 
 from ragops_agent_ce.credential_checker import check_provider_credentials
-from ragops_agent_ce.interactive_input import interactive_confirm
-from ragops_agent_ce.interactive_input import interactive_select
+from ragops_agent_ce.interactive_input import interactive_confirm, interactive_select
 
 console = Console()
 
@@ -120,18 +119,24 @@ class SetupWizard:
                 "available": True,
                 "has_embeddings": False,
             },
+            "5": {
+                "name": "donkit",
+                "display": "Donkit",
+                "description": "Donkit default models via Donkit API",
+                "available": True,
+            },
         }
         if use_case == "chat":
             providers.update(
                 {
-                    "5": {
+                    "6": {
                         "name": "openrouter",
                         "display": "OpenRouter",
                         "description": "Access 100+ models via OpenRouter API (chat models only, "
                         "needs separate embeddings provider)",
                         "available": True,
                         "has_embeddings": False,
-                    }
+                    },
                 }
             )
         # Build list of available choices for interactive selection
@@ -173,9 +178,28 @@ class SetupWizard:
                 return self._configure_ollama(use_case)
             case "openrouter":
                 return self._configure_openrouter()
+            case "donkit":
+                return self._configure_donkit()
             case _:
                 console.print(f"[red]✗ Unknown provider: {provider}[/red]")
                 return False
+
+    def _configure_donkit(self):
+        """Configure Donkit credentials."""
+
+        """Configure Donkit credentials."""
+        console.print("[dim]Get your API key at: https://donkit.ai/api[/dim]\n")
+        api_key = Prompt.ask("Enter Donkit API key", password=True)
+        if not api_key:
+            console.print("[red]✗ API key is required[/red]")
+            retry = Confirm.ask("Try again?", default=True)
+            if retry:
+                return self._configure_donkit()
+            return False
+        self.config["RAGOPS_DONKIT_API_KEY"] = api_key
+        self.config["RAGOPS_DONKIT_BASE_URL"] = "https://api.donkit.ai"
+        console.print("✓ Donkit configured\n")
+        return True
 
     def _configure_vertex(self) -> bool:
         """Configure Vertex AI credentials."""
@@ -416,20 +440,9 @@ class SetupWizard:
         """Configure optional settings."""
         console.print("[bold]Step 3:[/bold] Optional settings\n")
 
-        # Log level
-        configure_log = interactive_confirm("Configure log level?", default=False)
-        if configure_log:
-            # Use interactive select for log level
-            log_level = interactive_select(
-                choices=["DEBUG", "INFO", "WARNING", "ERROR"], title="Select log level"
-            )
-            if log_level:
-                self.config["RAGOPS_LOG_LEVEL"] = log_level
-                console.print(f"\n✓ Log level: [green]{log_level}[/green]\n")
-            else:
-                console.print("[dim]Using default log level: ERROR[/dim]\n")
-        else:
-            console.print("[dim]Using default log level: ERROR[/dim]\n")
+        # Always use ERROR log level by default
+        self.config["RAGOPS_LOG_LEVEL"] = "ERROR"
+        console.print("[dim]Using default log level: ERROR[/dim]\n")
 
     def save_config(self) -> bool:
         """Save configuration to .env file."""
@@ -559,19 +572,21 @@ def check_needs_setup(env_path: Path | None = None) -> bool:
     env_path = env_path or Path.cwd() / ".env"
 
     if not env_path.exists():
+        console.print(f"No .env file found at {env_path}")
         return True
 
     # Check if .env has required settings
     try:
         config = dotenv_values(env_path)
         provider = config.get("RAGOPS_LLM_PROVIDER")
-
+        console.print(f"Found .env with provider {provider}")
         if not provider:
             return True
 
         # Use shared credential checking logic
         return not check_provider_credentials(provider, env_path)
-    except Exception:
+    except Exception as ex:
+        logger.exception("Failed to check provider credentials - {}", ex)
         return True
 
 

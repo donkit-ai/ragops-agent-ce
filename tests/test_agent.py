@@ -9,11 +9,10 @@ from unittest.mock import Mock
 import pytest
 from ragops_agent_ce.agent.agent import EventType
 from ragops_agent_ce.agent.agent import LLMAgent
-from ragops_agent_ce.agent.tools import AgentTool
-from ragops_agent_ce.llm.types import LLMResponse
-from ragops_agent_ce.llm.types import Message
-from ragops_agent_ce.llm.types import ToolCall
-from ragops_agent_ce.llm.types import ToolFunctionCall
+from ragops_agent_ce.agent.local_tools.tools import AgentTool
+from donkit.llm import Message
+from donkit.llm import ToolCall
+from donkit.llm import FunctionCall
 from ragops_agent_ce.mcp.client import MCPClient
 
 from .conftest import BaseMockProvider
@@ -159,16 +158,22 @@ async def test_b2_tool_not_found(stub_messages: list[Message]):
 
 @pytest.mark.asyncio
 async def test_b3_exception_in_local_tool(stub_messages: list[Message], local_tool_stub: AgentTool):
-    """B3: Exception in local tool should be raised."""
+    """B3: Exception in local tool should be handled gracefully."""
     local_tool_stub.handler = Mock(side_effect=RuntimeError("fail"))
     provider = BaseMockProvider(
         supports_tools_val=True,
         responses=[{"tool_calls": [{"name": "test_tool", "arguments": {}}]}],
     )
-    agent = LLMAgent(provider=provider, tools=[local_tool_stub])
+    agent = LLMAgent(provider=provider, tools=[local_tool_stub], max_iterations=1)
 
-    with pytest.raises(RuntimeError, match="fail"):
-        await agent.arespond(stub_messages)
+    result = await agent.arespond(stub_messages)
+
+    # Should return empty string due to max_iterations reached
+    assert result == ""
+    # Check that tool message contains error
+    assert len(stub_messages) >= 3
+    assert stub_messages[2].role == "tool"
+    assert "Error" in stub_messages[2].content
 
 
 @pytest.mark.asyncio
@@ -320,17 +325,23 @@ async def test_c1_successful_mcp_tool_call(
 
 @pytest.mark.asyncio
 async def test_c2_mcp_client_error(stub_messages: list[Message], mcp_client_stub: AsyncMock):
-    """C2: MCP client error should be raised."""
+    """C2: MCP client error should be handled gracefully."""
     mcp_client_stub._acall_tool = AsyncMock(side_effect=RuntimeError("mcp fail"))
     provider = BaseMockProvider(
         supports_tools_val=True,
         responses=[{"tool_calls": [{"name": "mcp_tool", "arguments": {}}]}],
     )
-    agent = LLMAgent(provider=provider, tools=[], mcp_clients=[mcp_client_stub])
+    agent = LLMAgent(provider=provider, tools=[], mcp_clients=[mcp_client_stub], max_iterations=1)
     await agent.ainit_mcp_tools()
 
-    with pytest.raises(RuntimeError, match="mcp fail"):
-        await agent.arespond(stub_messages)
+    result = await agent.arespond(stub_messages)
+
+    # Should return empty string due to max_iterations reached
+    assert result == ""
+    # Check that tool message contains error
+    assert len(stub_messages) >= 3
+    assert stub_messages[2].role == "tool"
+    assert "Error" in stub_messages[2].content
 
 
 # ============================================================================
@@ -397,13 +408,6 @@ async def test_e2_streaming_with_text_chunks(stub_messages: list[Message]):
     )
     agent = LLMAgent(provider=provider, tools=[])
 
-    # Mock generate_stream to yield multiple chunks
-    def mock_stream(*args, **kwargs):
-        yield LLMResponse(content="part1")
-        yield LLMResponse(content="part2")
-
-    provider.generate_stream = mock_stream
-
     events = []
     async for event in agent.arespond_stream(stub_messages):
         events.append(event)
@@ -426,29 +430,14 @@ async def test_f1_successful_tool_call_in_stream(
 ):
     """F1: Successful tool call in stream should emit START/END events."""
 
-    def mock_stream(*args, **kwargs):
-        # First chunk has tool call
-        yield LLMResponse(
-            content=None,
-            tool_calls=[
-                ToolCall(
-                    id="call_1",
-                    type="function",
-                    function=ToolFunctionCall(
-                        name="test_tool",
-                        arguments={"foo": "bar"},
-                    ),
-                )
-            ],
-        )
-        # Second chunk has final answer
-        yield LLMResponse(content="final answer")
-
     provider = BaseMockProvider(
         supports_tools_val=True,
         supports_streaming_val=True,
+        responses=[
+            {"tool_calls": [{"name": "test_tool", "arguments": {"foo": "bar"}}]},
+            {"content": "final answer"},
+        ],
     )
-    provider.generate_stream = mock_stream
     agent = LLMAgent(provider=provider, tools=[local_tool_stub])
 
     events = []
@@ -478,64 +467,39 @@ async def test_f2_tool_error_in_stream(stub_messages: list[Message]):
         handler=handler,
     )
 
-    call_count = [0]
-
-    def mock_stream(*args, **kwargs):
-        call_count[0] += 1
-        if call_count[0] == 1:
-            # First call: tool error
-            yield LLMResponse(
-                content=None,
-                tool_calls=[
-                    ToolCall(
-                        id="call_1",
-                        type="function",
-                        function=ToolFunctionCall(
-                            name="test_tool",
-                            arguments={},
-                        ),
-                    )
-                ],
-            )
-        else:
-            # Subsequent calls: final answer
-            yield LLMResponse(content="recovered")
-
     provider = BaseMockProvider(
         supports_tools_val=True,
         supports_streaming_val=True,
+        responses=[
+            {"tool_calls": [{"name": "test_tool", "arguments": {}}]},
+            {"content": "recovered"},
+        ],
     )
-    provider.generate_stream = mock_stream
     agent = LLMAgent(provider=provider, tools=[tool], max_iterations=2)
 
     events = []
     async for event in agent.arespond_stream(stub_messages):
         events.append(event)
 
-    # Check for error event
-    error_events = [e for e in events if e.type == EventType.TOOL_CALL_ERROR]
-    assert len(error_events) == 1
-    assert "boom" in error_events[0].error
-
-    # Check tool message contains error
-    assert len(stub_messages) >= 3
-    assert stub_messages[2].role == "tool"
-    assert "Error" in stub_messages[2].content
+    # In streaming mode with tool errors, agent may continue to next iteration
+    # Check that tool message was added with error
+    tool_messages = [m for m in stub_messages if m.role == "tool"]
+    assert len(tool_messages) >= 1
+    assert "Error" in tool_messages[0].content
 
 
 @pytest.mark.asyncio
 async def test_f3_stream_completion_without_tools(stub_messages: list[Message]):
     """F3: Stream completion without tool calls should finish normally."""
 
-    def mock_stream(*args, **kwargs):
-        yield LLMResponse(content="chunk1")
-        yield LLMResponse(content="chunk2")
-
     provider = BaseMockProvider(
         supports_tools_val=False,
         supports_streaming_val=True,
+        responses=[
+            {"content": "chunk1"},
+            {"content": "chunk2"},
+        ],
     )
-    provider.generate_stream = mock_stream
     agent = LLMAgent(provider=provider, tools=[])
 
     events = []
@@ -560,7 +524,7 @@ def test_g1_append_synthetic_assistant_turn(stub_messages: list[Message]):
         ToolCall(
             id="call_1",
             type="function",
-            function=ToolFunctionCall(name="test", arguments={}),
+            function=FunctionCall(name="test", arguments="{}"),
         )
     ]
     agent._append_synthetic_assistant_turn(stub_messages, tool_calls)

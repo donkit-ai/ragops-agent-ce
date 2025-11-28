@@ -4,8 +4,7 @@ import sys
 
 from loguru import logger
 
-from .config import Settings
-from .config import load_settings
+from .config import Settings, load_settings
 
 _LOGURU_FORMAT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> "

@@ -13,8 +13,7 @@ import os
 
 import httpx
 from fastmcp import FastMCP
-from pydantic import BaseModel
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 
 class SearchQueryArgs(BaseModel):
@@ -36,7 +35,8 @@ server = FastMCP(
     description=(
         "Search for relevant documents in the RAG vector database. "
         "Returns the most relevant document chunks based on the query."
-        "Not use full rag-config, only retriever."
+        "This tool just use retriever without any options. Result may be inaccurate."
+        "Use this tool only for testing purposes. Not for answering questions."
     ).strip(),
 )
 async def search_documents(args: SearchQueryArgs) -> str:
@@ -105,6 +105,7 @@ async def search_documents(args: SearchQueryArgs) -> str:
         "Get a formatted RAG prompt with retrieved context for a query. "
         "Returns ready-to-use prompt string with relevant document chunks embedded."
         "Use full rag-config for prompt generation."
+        "Use this tool for answering."
     ).strip(),
 )
 async def get_rag_prompt(args: SearchQueryArgs) -> str:

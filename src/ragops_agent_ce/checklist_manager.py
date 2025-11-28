@@ -1,7 +1,8 @@
 """
 Checklist management module for RAGOps Agent CE.
 
-Handles checklist file operations, formatting, and watching functionality.
+Handles checklist operations, formatting, and watching functionality.
+Now uses database storage instead of file system.
 Follows Single Responsibility Principle - manages only checklist-related operations.
 """
 
@@ -10,10 +11,9 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
-from typing import Protocol
+from typing import Any, Protocol
 
+from ragops_agent_ce.db import close, kv_all_by_prefix, kv_get, open_db
 from ragops_agent_ce.display import ScreenRenderer
 from ragops_agent_ce.schemas.agent_schemas import AgentSettings
 
@@ -26,52 +26,64 @@ class ActiveChecklist:
 active_checklist = ActiveChecklist()
 
 
-def _list_checklists() -> list[tuple[str, float]]:
-    """Return list of all checklist files with their modification times."""
-    checklist_dir = Path("ragops_checklists")
-    if not checklist_dir.exists():
-        return []
-
-    checklists: list[tuple[str, float]] = []
-    for file_path in checklist_dir.glob("*.json"):
-        try:
-            mtime = file_path.stat().st_mtime
-            checklists.append((str(file_path.name), mtime))
-        except OSError:
-            continue
-
-    return sorted(checklists, key=lambda item: item[1])
-
-
-def _latest_checklist() -> tuple[str | None, float | None]:
-    """
-    Find the most recent checklist file.
+def _list_checklists() -> list[tuple[str, dict[str, Any]]]:
+    """Return list of all checklists from database with their data.
 
     Returns:
-        tuple: (filename, mtime) or (None, None) if no checklists found
+        list: List of (name, checklist_data) tuples
+    """
+    db = open_db()
+    try:
+        all_checklists = kv_all_by_prefix(db, "checklist_")
+        result: list[tuple[str, dict[str, Any]]] = []
+        for key, value in all_checklists:
+            try:
+                data = json.loads(value)
+                # Extract name from key (remove "checklist_" prefix)
+                name = key.replace("checklist_", "", 1)
+                result.append((name, data))
+            except json.JSONDecodeError:
+                continue
+        return result
+    finally:
+        close(db)
+
+
+def _latest_checklist() -> tuple[str | None, dict[str, Any] | None]:
+    """
+    Find the most recent checklist.
+
+    Returns:
+        tuple: (name, data) or (None, None) if no checklists found
     """
     checklists = _list_checklists()
     if not checklists:
         return None, None
+    # Return the last one (most recent)
     return checklists[-1]
 
 
-def _load_checklist(filename: str) -> dict[str, Any] | None:
+def _load_checklist(name: str) -> dict[str, Any] | None:
     """
-    Load checklist data from JSON file.
+    Load checklist data from database.
 
     Args:
-        filename: Name of the checklist file
+        name: Name of the checklist (without "checklist_" prefix)
 
     Returns:
         dict: Checklist data or None if loading fails
     """
+    db = open_db()
     try:
-        file_path = Path("ragops_checklists") / filename
-        with file_path.open("r", encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError):
+        key = f"checklist_{name}"
+        data_raw = kv_get(db, key)
+        if data_raw is None:
+            return None
+        return json.loads(data_raw)
+    except json.JSONDecodeError:
         return None
+    finally:
+        close(db)
 
 
 def format_checklist_compact(checklist_data: dict[str, Any] | None) -> str:
@@ -138,7 +150,8 @@ def _update_active_checklist_from_history(history: Sequence[_HistoryEntry]) -> N
         return
 
     if isinstance(parsed, dict) and parsed.get("name"):
-        active_checklist.name = f"{parsed['name']}.json"
+        # Store just the name without any extension
+        active_checklist.name = parsed["name"]
 
 
 def handle_checklist_tool_event(
@@ -153,10 +166,11 @@ def handle_checklist_tool_event(
 ) -> None:
     """Handle checklist-related tool events emitted by the agent stream."""
 
+    # Updated tool names - now without "checklist_" prefix (built-in tools)
     if tool_name not in (
-        "checklist_get_checklist",
-        "checklist_create_checklist",
-        "checklist_update_checklist_item",
+        "get_checklist",
+        "create_checklist",
+        "update_checklist_item",
     ):
         return
 
@@ -183,48 +197,50 @@ def get_current_checklist() -> str:
     Returns:
         str: Rich-formatted checklist content
     """
-    filename, _ = _latest_checklist()
-    if not filename:
+    name, data = _latest_checklist()
+    if not name or not data:
         return "[dim]No checklist found[/dim]"
 
-    checklist_data = _load_checklist(filename)
-    return format_checklist_compact(checklist_data)
+    return format_checklist_compact(data)
 
 
 def get_active_checklist_text(since_ts: float | None = None) -> str | None:
     """
     Return formatted checklist text only if there is at least one non-completed item.
 
+    Args:
+        since_ts: Only show checklists created after this timestamp (session start time)
+
     Returns:
         str | None: Rich-formatted checklist if active, otherwise None
     """
 
-    def _get_checklist(filename: str) -> str | None:
-        data = _load_checklist(filename)
+    def _has_active_items(data: dict[str, Any]) -> bool:
+        """Check if checklist has any non-completed items."""
         if not data or "items" not in data:
-            return None
+            return False
         items = data.get("items", [])
-        has_active = any(item.get("status", "pending") != "completed" for item in items)
-        if not has_active:
-            return None
-        return format_checklist_compact(data)
+        return any(item.get("status", "pending") != "completed" for item in items)
 
     checklists = _list_checklists()
     if not checklists:
         return None
 
+    # Check active checklist first (explicitly loaded by user)
+    # Don't filter by since_ts for explicitly activated checklists
     if active_checklist.name:
-        checklist = _get_checklist(active_checklist.name)
-        if checklist is None:
-            active_checklist.name = None
-        else:
-            return checklist
+        data = _load_checklist(active_checklist.name)
+        if data and _has_active_items(data):
+            return format_checklist_compact(data)
+        # Reset if no active items
+        active_checklist.name = None
 
-    for filename, mtime in reversed(checklists):
-        if since_ts is not None and mtime < since_ts:
+    # Find any checklist with active items created in this session
+    for name, data in reversed(checklists):
+        # Skip checklists created before session start
+        if since_ts is not None and data.get("created_at", 0) < since_ts:
             continue
-        data = _get_checklist(filename)
-        if data is not None:
-            return data
+        if _has_active_items(data):
+            return format_checklist_compact(data)
 
     return None

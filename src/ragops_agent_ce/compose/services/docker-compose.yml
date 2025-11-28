@@ -122,8 +122,8 @@ services:
 
   rag-service:
     image: donkitai/rag-service:latest
-    pull_policy: always
     container_name: ${RAG_SERVICE_CONTAINER_NAME:-rag-service}
+    pull_policy: always
     profiles:
       - rag-service
       - full-stack

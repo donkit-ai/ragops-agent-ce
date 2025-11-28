@@ -14,17 +14,13 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-from donkit.embeddings import get_ollama_embeddings
-from donkit.embeddings import get_vertexai_embeddings
+from donkit.embeddings import get_donkit_embeddings, get_ollama_embeddings, get_vertexai_embeddings
 from donkit.vectorstore_loader import create_vectorstore_loader
-from fastmcp import Context
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_openai import AzureOpenAIEmbeddings
-from langchain_openai import OpenAIEmbeddings
-from pydantic import BaseModel
-from pydantic import Field
+from langchain_openai import AzureOpenAIEmbeddings, OpenAIEmbeddings
+from pydantic import BaseModel, Field
 
 
 def create_embedder(embedder_type: str) -> Embeddings:
@@ -64,8 +60,13 @@ def create_embedder(embedder_type: str) -> Embeddings:
     def __check_ollama():
         api_key = os.getenv("RAGOPS_OLLAMA_API_KEY", "ollama")
         base_url = os.getenv("RAGOPS_OLLAMA_BASE_URL", "http://localhost:11434").replace("/v1", "")
-        model = os.getenv("RAGOPS_OLLAMA_EMBEDDINGS_MODEL", "nomic-embed-text")
+        model = os.getenv("RAGOPS_OLLAMA_EMBEDDINGS_MODEL", "embeddinggemma")
         return api_key, base_url, model
+
+    def __check_donkit():
+        api_key = os.getenv("RAGOPS_DONKIT_API_KEY", "qwerty")
+        base_url = os.getenv("RAGOPS_DONKIT_BASE_URL", "https://api.donkit.ai")
+        return api_key, base_url
 
     if embedder_type == "openai":
         api_key, base_url, model = __check_openai()
@@ -95,6 +96,14 @@ def create_embedder(embedder_type: str) -> Embeddings:
         return get_ollama_embeddings(
             host=base_url,
             model=model,
+        )
+    elif embedder_type == "donkit":
+        api_key, base_url = __check_donkit()
+        logger.debug(f"Using Donkit API key: {api_key}, with base URL: {base_url}")
+        return get_donkit_embeddings(
+            base_url=base_url,
+            api_token=api_key,
+            provider="default",
         )
     else:
         raise ValueError(f"Unknown embedder type: {embedder_type}")
@@ -179,12 +188,14 @@ async def vectorstore_load(
 
     try:
         embeddings = create_embedder(params.embedder_type)
+        logger.debug(f"Using embeddings: {embeddings}")
         loader = create_vectorstore_loader(
             db_type=params.backend,
             embeddings=embeddings,
             collection_name=params.collection_name,
             database_uri=params.database_uri,
         )
+        logger.debug(f"Vectorstore loader created: {loader}")
     except ValueError as e:
         raise ValueError(f"Error initializing vectorstore: {e}")
     except Exception as e:
@@ -235,7 +246,7 @@ async def vectorstore_load(
                     batch = documents[start_idx:end_idx]
 
                     task_id = uuid4()
-                    loader.load_documents(task_id=task_id, documents=batch)
+                    await loader.aload_documents(task_id=task_id, documents=batch)
 
                     # Report batch progress
                     if total_batches > 1:
@@ -263,7 +274,6 @@ async def vectorstore_load(
                     f"{file_idx}/{total_files} files ({percentage:.1f}%) - "
                     f"{file.name}: {chunk_count} chunks loaded"
                 )
-                print(msg)
                 await ctx.report_progress(
                     progress=file_idx,
                     total=total_files,
@@ -271,6 +281,7 @@ async def vectorstore_load(
                 )
 
             except Exception as e:
+                logger.error(f"Error loading file {file.name}: {e}")
                 failed_files.append((file.name, f"vectorstore error: {str(e)}"))
 
         except FileNotFoundError:

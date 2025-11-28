@@ -7,8 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from dotenv import dotenv_values
-from dotenv import find_dotenv
+from dotenv import dotenv_values, find_dotenv
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
 from loguru import logger

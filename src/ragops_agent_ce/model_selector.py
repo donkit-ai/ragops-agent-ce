@@ -7,18 +7,18 @@ for configured credentials and automatic resume of latest selection.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from donkit.llm import GenerateRequest, Message
 from rich.console import Console
 from rich.text import Text
 
 from ragops_agent_ce.config import load_settings
 from ragops_agent_ce.credential_checker import check_provider_credentials
-from ragops_agent_ce.db import kv_get
-from ragops_agent_ce.db import kv_set
-from ragops_agent_ce.db import open_db
+from ragops_agent_ce.db import kv_get, kv_set, open_db
 from ragops_agent_ce.interactive_input import interactive_select
 from ragops_agent_ce.llm.provider_factory import get_provider
 from ragops_agent_ce.supported_models import SUPPORTED_MODELS
@@ -50,6 +50,10 @@ PROVIDERS = {
     "openrouter": {
         "display": "OpenRouter",
         "description": "Access 100+ models via OpenRouter API",
+    },
+    "donkit": {
+        "display": "Donkit",
+        "description": "Donkit default model",
     },
 }
 
@@ -333,16 +337,11 @@ def select_model_at_startup(
 
                 # Validate model by trying to use it
                 try:
-                    from ragops_agent_ce.llm.types import Message
-
                     # Test if model is actually available
                     test_messages = [Message(role="user", content="test")]
+                    request = GenerateRequest(messages=test_messages)
                     try:
-                        provider_instance.generate(
-                            test_messages,
-                            model=model,
-                            max_tokens=1,
-                        )
+                        asyncio.run(provider_instance.generate(request))
                         # If successful, model is available
                         console.print(f"✓ Model selected: [green]{model}[/green]\n")
                     except Exception as model_error:

@@ -1,17 +1,22 @@
 import json
+
+import pytest
 import os
 import sys
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock
-from unittest.mock import patch
-
-import pytest
-from ragops_agent_ce.llm.types import LLMResponse
-from ragops_agent_ce.llm.types import Message
-from ragops_agent_ce.llm.types import ToolCall
-from ragops_agent_ce.llm.types import ToolFunctionCall
+from typing import Any, AsyncIterator
+from unittest.mock import AsyncMock, patch
+from donkit.llm import (
+    FunctionCall,
+    GenerateRequest,
+    GenerateResponse,
+    LLMModelAbstract,
+    Message,
+    ModelCapability,
+    StreamChunk,
+    ToolCall,
+)
 
 # Ensure src/ is on sys.path for tests without installation
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -22,12 +27,25 @@ if SRC_PATH.exists():
 os.environ.setdefault("RAGOPS_API_URL", "http://localhost:8080")
 
 
+@pytest.fixture(autouse=True)
+def disable_loguru():
+    """Disable loguru logging during tests to prevent pytest capture issues."""
+    import loguru
+    # Remove all handlers and disable logging
+    loguru.logger.remove()
+    # Add a null handler to prevent any logging
+    loguru.logger.add(lambda x: None, level="CRITICAL", enqueue=False)
+    yield
+    # Clean up after test
+    loguru.logger.remove()
+
+
 # ============================================================================
 # Reusable Mock Classes
 # ============================================================================
 
 
-class BaseMockProvider:
+class BaseMockProvider(LLMModelAbstract):
     """Base mock LLM provider for testing with configurable responses.
 
     Can be extended or configured for different test scenarios.
@@ -38,6 +56,7 @@ class BaseMockProvider:
         responses: list[dict[str, Any]] | None = None,
         supports_tools_val: bool = True,
         supports_streaming_val: bool = False,
+        model_name_val: str = "mock-model",
     ) -> None:
         """Initialize mock provider.
 
@@ -47,6 +66,7 @@ class BaseMockProvider:
                 - 'tool_calls': List of tool calls to return
             supports_tools_val: Whether provider supports tools (default: True)
             supports_streaming_val: Whether provider supports streaming (default: False)
+            model_name_val: Model name to return (default: "mock-model")
         """
 
         self.call_count = 0
@@ -55,27 +75,32 @@ class BaseMockProvider:
         self.responses = responses or [{"content": "Default response"}]
         self.supports_tools_val = supports_tools_val
         self.supports_streaming_val = supports_streaming_val
-        self._LLMResponse = LLMResponse
-        self._ToolCall = ToolCall
-        self._ToolFunctionCall = ToolFunctionCall
+        self._model_name = model_name_val
 
-    def supports_tools(self) -> bool:
-        """Support tools."""
-        return self.supports_tools_val
+    @property
+    def model_name(self) -> str:
+        """Return the model name/identifier."""
+        return self._model_name
 
-    def supports_streaming(self) -> bool:
-        """Support streaming."""
-        return self.supports_streaming_val
+    @model_name.setter
+    def model_name(self, value: str) -> None:
+        """Set the model name/identifier."""
+        self._model_name = value
 
-    def generate(
-        self,
-        messages: list[Any],
-        tools: list[Any] | None = None,
-        model: str | None = None,
-    ) -> Any:
-        """Generate response based on configured responses."""
+    @property
+    def capabilities(self) -> ModelCapability:
+        """Return the capabilities supported by this model."""
+        caps = ModelCapability.TEXT_GENERATION
+        if self.supports_tools_val:
+            caps |= ModelCapability.TOOL_CALLING
+        if self.supports_streaming_val:
+            caps |= ModelCapability.STREAMING
+        return caps
+
+    async def generate(self, request: GenerateRequest) -> GenerateResponse:
+        """Generate a response for the given request."""
         self.call_count += 1
-        self.messages_history.append(messages.copy())
+        self.messages_history.append(request.messages.copy())
 
         # Get response config for current call (cycle if needed)
         response_idx = (self.call_count - 1) % len(self.responses)
@@ -94,62 +119,57 @@ class BaseMockProvider:
                     except (json.JSONDecodeError, ValueError):
                         args = {}
                 tool_calls.append(
-                    self._ToolCall(
+                    ToolCall(
                         id=tc.get("id", f"call_{i}"),
                         type="function",
-                        function=self._ToolFunctionCall(
+                        function=FunctionCall(
                             name=tc["name"],
-                            arguments=args,
+                            arguments=json.dumps(args),
                         ),
                     )
                 )
 
-        return self._LLMResponse(
+        return GenerateResponse(
             content=response_config.get("content"),
             tool_calls=tool_calls,
         )
 
-    def generate_stream(
-        self,
-        messages: list[Any],
-        tools: list[Any] | None = None,
-        model: str | None = None,
-    ) -> Any:
-        """Stream responses based on configured responses."""
+    async def generate_stream(
+        self, request: GenerateRequest
+    ) -> AsyncIterator[StreamChunk]:
+        """Generate a streaming response for the given request."""
         self.stream_call_count += 1
-        self.messages_history.append(messages.copy())
+        self.messages_history.append(request.messages.copy())
 
-        # Get response config for current call (cycle if needed)
-        response_idx = (self.stream_call_count - 1) % len(self.responses)
-        response_config = self.responses[response_idx]
-
-        # Build tool calls if provided
-        tool_calls = None
-        if "tool_calls" in response_config:
-            tool_calls = []
-            for i, tc in enumerate(response_config["tool_calls"]):
-                # Parse arguments if they're a string
-                args = tc.get("arguments", {})
-                if isinstance(args, str):
-                    try:
-                        args = json.loads(args)
-                    except (json.JSONDecodeError, ValueError):
-                        args = {}
-                tool_calls.append(
-                    self._ToolCall(
-                        id=tc.get("id", f"call_{i}"),
-                        type="function",
-                        function=self._ToolFunctionCall(
-                            name=tc["name"],
-                            arguments=args,
-                        ),
+        # For streaming, yield each response as a separate chunk
+        for response_config in self.responses:
+            # Build tool calls if provided
+            tool_calls = None
+            if "tool_calls" in response_config:
+                tool_calls = []
+                for i, tc in enumerate(response_config["tool_calls"]):
+                    # Parse arguments if they're a string
+                    args = tc.get("arguments", {})
+                    if isinstance(args, str):
+                        try:
+                            args = json.loads(args)
+                        except (json.JSONDecodeError, ValueError):
+                            args = {}
+                    tool_calls.append(
+                        ToolCall(
+                            id=tc.get("id", f"call_{i}"),
+                            type="function",
+                            function=FunctionCall(
+                                name=tc["name"],
+                                arguments=json.dumps(args),
+                            ),
+                        )
                     )
-                )
 
-        yield self._LLMResponse(
-            content=response_config.get("content"),
-            tool_calls=tool_calls,
-        )
+            yield StreamChunk(
+                content=response_config.get("content"),
+                tool_calls=tool_calls,
+            )
 
 
 class BaseMockMCPClient:

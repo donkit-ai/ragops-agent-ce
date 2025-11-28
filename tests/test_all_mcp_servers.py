@@ -1,7 +1,6 @@
 """Comprehensive tests for all MCP Servers using FastMCP Client.
 
 Tests all 7 MCP servers:
-1. checklist_server - Task checklist management
 2. chunker_server - Document chunking
 3. compose_manager_server - Docker compose management
 4. planner_server - RAG config planning
@@ -21,7 +20,6 @@ import pytest
 import pytest_asyncio
 from fastmcp.client import Client
 from fastmcp.client.transports import FastMCPTransport
-from ragops_agent_ce.mcp.servers.checklist_server import server as checklist_server
 from ragops_agent_ce.mcp.servers.chunker_server import server as chunker_server
 from ragops_agent_ce.mcp.servers.compose_manager_server import server as compose_server
 from ragops_agent_ce.mcp.servers.planner_server import server as planner_server
@@ -34,7 +32,6 @@ from ragops_agent_ce.mcp.servers.vectorstore_loader_server import server as vect
 # ============================================================================
 
 SERVERS = {
-    "checklist": checklist_server,
     "chunker": chunker_server,
     "compose": compose_server,
     "planner": planner_server,
@@ -44,11 +41,6 @@ SERVERS = {
 }
 
 EXPECTED_TOOLS = {
-    "checklist": {
-        "create_checklist",
-        "get_checklist",
-        "update_checklist_item",
-    },
     "chunker": {
         "chunk_documents",
     },
@@ -100,7 +92,7 @@ async def server_client(request) -> Client[FastMCPTransport]:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "server_client",
-    ["checklist", "chunker", "compose", "planner", "query", "read_engine", "vectorstore"],
+    ["chunker", "compose", "planner", "query", "read_engine", "vectorstore"],
     indirect=True,
 )
 async def test_server_list_tools(server_client: Client[FastMCPTransport]) -> None:
@@ -114,7 +106,7 @@ async def test_server_list_tools(server_client: Client[FastMCPTransport]) -> Non
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "server_client",
-    ["checklist", "chunker", "compose", "planner", "query", "read_engine", "vectorstore"],
+    ["chunker", "compose", "planner", "query", "read_engine", "vectorstore"],
     indirect=True,
 )
 async def test_server_tools_have_descriptions(
@@ -129,7 +121,7 @@ async def test_server_tools_have_descriptions(
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "server_client",
-    ["checklist", "chunker", "compose", "planner", "query", "read_engine", "vectorstore"],
+    ["chunker", "compose", "planner", "query", "read_engine", "vectorstore"],
     indirect=True,
 )
 async def test_server_tools_have_schemas(server_client: Client[FastMCPTransport]) -> None:
@@ -149,7 +141,6 @@ async def test_server_tools_have_schemas(server_client: Client[FastMCPTransport]
 @pytest.mark.parametrize(
     "server_client,server_name",
     [
-        ("checklist", "checklist"),
         ("chunker", "chunker"),
         ("compose", "compose"),
         ("planner", "planner"),
@@ -231,7 +222,6 @@ async def test_query_server_get_rag_prompt_missing_query(
 async def all_clients():
     """Create clients for all servers."""
     async with (
-        Client(transport=checklist_server) as checklist,
         Client(transport=chunker_server) as chunker,
         Client(transport=compose_server) as compose,
         Client(transport=planner_server) as planner,
@@ -240,7 +230,6 @@ async def all_clients():
         Client(transport=vectorstore_server) as vectorstore,
     ):
         clients = {
-            "checklist": checklist,
             "chunker": chunker,
             "compose": compose,
             "planner": planner,

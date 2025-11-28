@@ -1,5 +1,4 @@
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 
 try:
     pkg_version = version("donkit-ragops-ce")

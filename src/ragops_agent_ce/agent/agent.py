@@ -4,33 +4,39 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from enum import StrEnum
-from enum import auto
+from enum import StrEnum, auto
 
+from donkit.llm import GenerateRequest, LLMModelAbstract, Message, ModelCapability, Tool
 from loguru import logger
 
-from ..llm.base import LLMProvider
-from ..llm.types import Message
-from ..llm.types import ToolSpec
-from ..mcp.client import MCPClient
-from .project_tools import tool_add_loaded_files
-from .project_tools import tool_create_project
-from .project_tools import tool_delete_project
-from .project_tools import tool_get_project
-from .project_tools import tool_get_rag_config
-from .project_tools import tool_list_loaded_files
-from .project_tools import tool_list_projects
-from .project_tools import tool_save_rag_config
-from .tools import AgentTool
-from .tools import tool_db_get
-from .tools import tool_grep
-from .tools import tool_interactive_user_choice
-from .tools import tool_interactive_user_confirm
-from .tools import tool_list_directory
-from .tools import tool_quick_start_rag_config
-from .tools import tool_read_file
-from .tools import tool_time_now
-from .tools import tool_update_rag_config_field
+from ragops_agent_ce.agent.local_tools.checklist_tools import (
+    tool_create_checklist,
+    tool_get_checklist,
+    tool_update_checklist_item,
+)
+from ragops_agent_ce.agent.local_tools.project_tools import (
+    tool_add_loaded_files,
+    tool_create_project,
+    tool_delete_project,
+    tool_get_project,
+    tool_get_rag_config,
+    tool_list_loaded_files,
+    tool_list_projects,
+    tool_save_rag_config,
+)
+from ragops_agent_ce.agent.local_tools.tools import (
+    AgentTool,
+    tool_db_get,
+    tool_grep,
+    tool_interactive_user_choice,
+    tool_interactive_user_confirm,
+    tool_list_directory,
+    tool_quick_start_rag_config,
+    tool_read_file,
+    tool_time_now,
+    tool_update_rag_config_field,
+)
+from ragops_agent_ce.mcp.client import MCPClient
 
 
 class EventType(StrEnum):
@@ -70,13 +76,17 @@ def default_tools() -> list[AgentTool]:
         tool_get_rag_config(),
         tool_add_loaded_files(),
         tool_list_loaded_files(),
+        # Checklist management tools
+        tool_create_checklist(),
+        tool_get_checklist(),
+        tool_update_checklist_item(),
     ]
 
 
 class LLMAgent:
     def __init__(
         self,
-        provider: LLMProvider,
+        provider: LLMModelAbstract,
         tools: list[AgentTool] | None = None,
         mcp_clients: list[MCPClient] | None = None,
         max_iterations: int = 50,
@@ -102,11 +112,11 @@ class LLMAgent:
                 )
                 pass
 
-    def _tool_specs(self) -> list[ToolSpec]:
+    def _tool_specs(self) -> list[Tool]:
         specs = [t.to_tool_spec() for t in self.local_tools]
         for tool_info, _ in self.mcp_tools.values():
             specs.append(
-                ToolSpec(
+                Tool(
                     **{
                         "function": {
                             "name": tool_info["name"],
@@ -129,7 +139,9 @@ class LLMAgent:
     # --- Internal helpers to keep respond() small and readable ---
     def _should_execute_tools(self, resp) -> bool:
         """Whether the provider response requires tool execution."""
-        return bool(self.provider.supports_tools() and resp.tool_calls)
+        return bool(
+            self.provider.supports_capability(ModelCapability.TOOL_CALLING) and resp.tool_calls
+        )
 
     def _append_synthetic_assistant_turn(self, messages: list[Message], tool_calls) -> None:
         """Append a single assistant message with tool_calls."""
@@ -185,7 +197,8 @@ class LLMAgent:
             return "Tool execution cancelled by user (Ctrl+C)"
         except Exception as e:
             logger.error(f"Tool execution error: {e}", exc_info=True)
-            raise
+            # Return error message as tool result
+            return f"Error: {str(e)}"
 
         return self._serialize_tool_result(result)
 
@@ -224,7 +237,7 @@ class LLMAgent:
         if system:
             messages.append(Message(role="system", content=system))
         messages.append(Message(role="user", content=prompt))
-        return await self.arespond(messages, model=model)
+        return await self.arespond(messages)
 
     async def achat_stream(
         self, *, prompt: str, system: str | None = None, model: str | None = None
@@ -234,19 +247,24 @@ class LLMAgent:
         if system:
             messages.append(Message(role="system", content=system))
         messages.append(Message(role="user", content=prompt))
-        async for chunk in self.arespond_stream(messages, model=model):
+        async for chunk in self.arespond_stream(messages):
             yield chunk
 
-    async def arespond(self, messages: list[Message], *, model: str | None = None) -> str:
+    async def arespond(self, messages: list[Message]) -> str:
         """Perform a single assistant turn given an existing message history.
 
         This method mutates the provided messages list by appending tool results as needed.
         Returns the assistant content.
         """
-        tools = self._tool_specs() if self.provider.supports_tools() else None
+        tools = (
+            self._tool_specs()
+            if self.provider.supports_capability(ModelCapability.TOOL_CALLING)
+            else None
+        )
 
         for _ in range(self.max_iterations):
-            resp = self.provider.generate(messages, tools=tools, model=model)
+            request = GenerateRequest(messages=messages, tools=tools)
+            resp = await self.provider.generate(request)
 
             # Handle tool calls if requested
             if self._should_execute_tools(resp):
@@ -256,15 +274,14 @@ class LLMAgent:
 
             # Otherwise return the content from the model
             if not resp.content:
-                retry_resp = self.provider.generate(messages, model=model)
+                retry_request = GenerateRequest(messages=messages)
+                retry_resp = await self.provider.generate(retry_request)
                 return retry_resp.content or ""
             return resp.content
 
         return ""
 
-    async def arespond_stream(
-        self, messages: list[Message], *, model: str | None = None
-    ) -> AsyncIterator[StreamEvent]:
+    async def arespond_stream(self, messages: list[Message]) -> AsyncIterator[StreamEvent]:
         """Perform a single assistant turn with streaming output.
 
         This method mutates the provided messages list by appending tool results as needed.
@@ -273,23 +290,24 @@ class LLMAgent:
         Returns:
             AsyncIterator that yields StreamEvent objects.
         """
-        if not self.provider.supports_streaming():
-            # Yield the full response as a single content event
-            yield StreamEvent(
-                type=EventType.CONTENT, content=await self.arespond(messages, model=model)
-            )
-            return
-
-        tools = self._tool_specs() if self.provider.supports_tools() else None
+        tools = (
+            self._tool_specs()
+            if self.provider.supports_capability(ModelCapability.TOOL_CALLING)
+            else None
+        )
 
         for _ in range(self.max_iterations):
-            for chunk in self.provider.generate_stream(messages, tools=tools, model=model):
+            request = GenerateRequest(messages=messages, tools=tools)
+            async for chunk in self.provider.generate_stream(request):  # noqa
+                logger.debug(f"Received chunk: {chunk}")
                 # Yield text chunks as they arrive
                 if chunk.content:
                     yield StreamEvent(type=EventType.CONTENT, content=chunk.content)
 
                 # Handle tool calls immediately when they arrive
-                if chunk.tool_calls and self.provider.supports_tools():
+                if chunk.tool_calls and self.provider.supports_capability(
+                    ModelCapability.TOOL_CALLING
+                ):
                     # Append synthetic assistant turn
                     self._append_synthetic_assistant_turn(messages, chunk.tool_calls)
 

@@ -3,26 +3,22 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
+from donkit.llm import GenerateRequest, LLMModelAbstract, Message
 from loguru import logger
 
 from ragops_agent_ce import texts
 from ragops_agent_ce.agent import AgentTool
 from ragops_agent_ce.agent.agent import LLMAgent
-from ragops_agent_ce.config import Settings
-from ragops_agent_ce.config import load_settings
+from ragops_agent_ce.config import Settings, load_settings
 from ragops_agent_ce.credential_checker import check_provider_credentials
-from ragops_agent_ce.interactive_input import interactive_confirm
-from ragops_agent_ce.interactive_input import interactive_select
-from ragops_agent_ce.llm import LLMProvider
+from ragops_agent_ce.interactive_input import interactive_confirm, interactive_select
 from ragops_agent_ce.llm.provider_factory import get_provider
-from ragops_agent_ce.llm.types import Message
 from ragops_agent_ce.mcp.client import MCPClient
-from ragops_agent_ce.model_selector import PROVIDERS
-from ragops_agent_ce.model_selector import save_model_selection
+from ragops_agent_ce.model_selector import PROVIDERS, save_model_selection
 from ragops_agent_ce.schemas.agent_schemas import AgentSettings
 from ragops_agent_ce.setup_wizard import SetupWizard
 from ragops_agent_ce.supported_models import SUPPORTED_MODELS
@@ -118,7 +114,7 @@ def format_model_choices(models: Iterable[str], current_model: str | None) -> li
 
 
 def validate_model_choice(
-    prov: LLMProvider,
+    prov: LLMModelAbstract,
     provider_key: str,
     model_name: str,
     agent_settings: AgentSettings,
@@ -133,7 +129,8 @@ def validate_model_choice(
     try:
         test_messages = [Message(role="user", content="test")]
         try:
-            prov.generate(test_messages, model=model_name, max_tokens=1)
+            request = GenerateRequest(messages=test_messages, max_tokens=1)
+            prov.generate(request)
             agent_settings.model = model_name
             save_model_selection(provider_key, model_name)
             messages.append(texts.MODEL_SELECTED.format(model=model_name))
@@ -165,7 +162,7 @@ def validate_model_choice(
 @dataclass
 class ProviderSelectionResult:
     provider: str | None
-    prov: LLMProvider | None
+    prov: LLMModelAbstract | None
     agent: LLMAgent | None
     settings: Settings
     agent_settings: AgentSettings
@@ -209,7 +206,7 @@ async def select_provider_interactively(
     console,
     settings: Settings,
     agent_settings: AgentSettings,
-    prov: LLMProvider | None,
+    prov: LLMModelAbstract | None,
     agent: LLMAgent | None,
     tools: list[AgentTool],
     mcp_clients: list[MCPClient],
