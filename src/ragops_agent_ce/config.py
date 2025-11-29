@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     # API keys and endpoints
     openai_base_url: str = Field(default="https://api.openai.com/v1")
     openai_api_key: str | None = Field(default=None)
+    openai_organization: str | None = Field(default=None)
     # Azure OpenAI
     azure_openai_api_key: str | None = Field(default=None)
     azure_openai_endpoint: str | None = Field(default=None)
