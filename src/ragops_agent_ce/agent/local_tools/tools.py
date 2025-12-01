@@ -462,7 +462,7 @@ def tool_interactive_user_confirm() -> AgentTool:
 def tool_quick_start_rag_config() -> AgentTool:
     """Tool for quickly setting up RAG with recommended settings."""
 
-    def _handler() -> str:
+    def _handler(args) -> str:
         # Ask user if they want to use quick start or customize
         use_quick_start = interactive_confirm(
             question="Use recommended Quick Start settings? (You can customize later)",
