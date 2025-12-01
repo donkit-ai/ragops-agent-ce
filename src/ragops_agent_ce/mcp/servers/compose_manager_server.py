@@ -72,6 +72,19 @@ AVAILABLE_SERVICES = {
     },
 }
 
+RAG_SERVICE_API = """
+Endpoints
+- POST /api/query/stream – streaming final response
+- POST /api/query/search –
+        Returns the most relevant document chunks based on the query.
+        This route just use retriever without any options. Result may be inaccurate.
+- POST /api/query/evaluation – evaluation or not streaming result.
+All POST endpoints use body:
+{
+  "query": "string"
+}
+"""
+
 
 def check_docker_installed() -> tuple[bool, str]:
     """Check if Docker is installed and running."""
@@ -692,17 +705,19 @@ async def start_service(args: StartServiceArgs) -> str:
                     host_port = port_mapping.split(":")[0] if ":" in port_mapping else port_mapping
                     ports = [port_mapping]
                     url = f"http://localhost:{host_port}"
-
+            success_result = {
+                "status": "success",
+                "service": service,
+                "message": f"{service_info['description']} started successfully",
+                "url": url,
+                "ports": ports,
+                "custom_ports_applied": args.custom_ports is not None,
+                "output": result.stdout,
+            }
+            if service == "rag-service":
+                success_result["rag_service_api_reference"] = RAG_SERVICE_API
             return json.dumps(
-                {
-                    "status": "success",
-                    "service": service,
-                    "message": f"{service_info['description']} started successfully",
-                    "url": url,
-                    "ports": ports,
-                    "custom_ports_applied": args.custom_ports is not None,
-                    "output": result.stdout,
-                },
+                success_result,
                 indent=2,
             )
         else:
@@ -766,7 +781,6 @@ async def stop_service(args: StopServiceArgs) -> str:
             run_kwargs["cwd"] = project_path
 
         result = subprocess.run(cmd, **run_kwargs)
-
         if result.returncode == 0:
             return json.dumps(
                 {

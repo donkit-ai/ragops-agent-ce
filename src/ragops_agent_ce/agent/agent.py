@@ -300,7 +300,6 @@ class LLMAgent:
         for _ in range(self.max_iterations):
             request = GenerateRequest(messages=messages, tools=tools)
             async for chunk in self.provider.generate_stream(request):  # noqa
-                logger.debug(f"Received chunk: {chunk}")
                 # Yield text chunks as they arrive
                 if chunk.content:
                     yield StreamEvent(type=EventType.CONTENT, content=chunk.content)

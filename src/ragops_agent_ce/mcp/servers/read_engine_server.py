@@ -204,16 +204,24 @@ async def process_documents(args: ProcessDocumentsArgs, ctx: Context) -> str:
 
     # Process each file - DonkitReader will save directly to project directory
     # Progress reporting is now handled internally by DonkitReader for PDF pages
+    files_counter = 0
+    total_files = len(files_to_process)
     for file_path in files_to_process:
         try:
             logger.info(f"Processing file: {file_path}")
 
             # Pass output_dir to save directly to project directory (no moving needed)
             # Use async version for better performance
+            await ctx.report_progress(
+                progress=files_counter,
+                total=total_files,
+                message=f"Processing file {file_path.name} - {files_counter}/{total_files}",
+            )
             output_path = await reader.aread_document(
                 str(file_path),
                 output_dir=str(project_output_dir),
             )
+            files_counter += 1
             logger.debug(f"DonkitReader saved to: {output_path}")
             processed_files.append(output_path)
             logger.info(f"✓ Processed: {file_path.name} -> {output_path}")
