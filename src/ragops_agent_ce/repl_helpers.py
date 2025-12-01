@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -18,6 +19,33 @@ from ragops_agent_ce.schemas.agent_schemas import AgentSettings
 def format_timestamp() -> str:
     """Return timestamp string used in transcript lines."""
     return "[dim]" + time.strftime("[%H:%M]", time.localtime()) + "[/]"
+
+
+def render_markdown_to_rich(text: str) -> str:
+    """Convert Markdown text to simple Rich markup without breaking formatting."""
+    # Simple markdown to rich markup conversion without full rendering
+    # This preserves the transcript panel formatting
+
+    # Use non-greedy match and allow any characters except backtick
+    result = re.sub(r"`([^`]+)`", r"[cyan]\1[/cyan]", text)
+
+    # Bold: **text** -> [bold]text[/bold]
+    # Use non-greedy match and allow newlines with DOTALL flag
+    result = re.sub(r"\*\*([^\*]+?)\*\*", r"[bold]\1[/bold]", result)
+
+    # Italic: *text* -> [italic]text[/italic] (but don't match list items)
+    # Match single asterisks that aren't part of ** or list items
+    result = re.sub(r"(?<!\*)\*([^\*\n]+?)\*(?!\*)", r"[italic]\1[/italic]", result)
+
+    # Headers: ## text -> [bold cyan]text[/bold cyan]
+    result = re.sub(r"^#+\s+(.+)$", r"[bold cyan]\1[/bold cyan]", result, flags=re.MULTILINE)
+
+    # List items: - text or * text -> • text (with proper indentation preserved)
+    result = re.sub(r"^(\s*)[*-]\s+", r"\1• ", result, flags=re.MULTILINE)
+
+    # Numbered lists: 1. text -> 1. text (keep as is)
+
+    return result
 
 
 @dataclass
@@ -116,6 +144,7 @@ class MCPEventHandler:
         if event.type == EventType.CONTENT:
             content_chunk = event.content or ""
             reply = reply + content_chunk
+            # Markdown will be rendered at the end when we have the full message
             display_content = display_content + content_chunk
             return reply, display_content, temp_executing
         if event.type == EventType.TOOL_CALL_START:

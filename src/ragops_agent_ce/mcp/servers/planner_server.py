@@ -19,7 +19,6 @@ from ragops_agent_ce.schemas.config_schemas import RagConfig
 
 class RagConfigPlanArgs(BaseModel):
     project_id: str
-    goal: str
     rag_config: RagConfig = Field(default_factory=RagConfig)
 
     @model_validator(mode="after")

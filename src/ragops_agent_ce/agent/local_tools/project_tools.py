@@ -44,10 +44,9 @@ def _deep_update(base: dict[str, Any], update: dict[str, Any]) -> None:
 def tool_create_project() -> AgentTool:
     def handler(payload: dict[str, Any]) -> str:
         project_id = payload.get("project_id") or uuid.uuid4().hex
-        goal = payload.get("goal")
         checklist = payload.get("checklist")
-        if not project_id or not goal:
-            return "Error: project_id and goal are required."
+        if not project_id:
+            return "Error: project_id is required."
         if not checklist:
             return "Error: checklist is required."
         db = open_db()
@@ -58,7 +57,6 @@ def tool_create_project() -> AgentTool:
 
             project_state = {
                 "project_id": project_id,
-                "goal": goal,
                 "checklist": checklist,
                 "status": "new",
                 "configuration": None,
@@ -74,7 +72,7 @@ def tool_create_project() -> AgentTool:
     return AgentTool(
         name="create_project",
         description=(
-            "Creates a new RAG project with a given ID and goal, "
+            "Creates a new RAG project with a given ID"
             "initializing its state in the database."
         ),
         parameters={
@@ -85,66 +83,16 @@ def tool_create_project() -> AgentTool:
                     "description": "A unique identifier for the project. "
                     "If not provided, a random ID will be generated.",
                 },
-                "goal": {
-                    "type": "string",
-                    "description": "The main objective of the RAG pipeline.",
-                },
                 "checklist": {
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "A list of tasks to complete the project.",
                 },
             },
-            "required": ["goal", "checklist"],
+            "required": ["checklist"],
         },
         handler=handler,
     )
-
-
-#
-# def tool_update_project() -> AgentTool:
-#     def handler(payload: dict[str, Any]) -> str:
-#         project_id = payload.get("project_id")
-#         update_data = payload.get("update_data")
-#         if not project_id or not update_data:
-#             return "Error: project_id and update_data are required."
-#
-#         db = open_db()
-#         try:
-#             key = _project_key(project_id)
-#             current_state_raw = kv_get(db, key)
-#             if current_state_raw is None:
-#                 return f"Error: Project '{project_id}' not found."
-#
-#             current_state = json.loads(current_state_raw)
-#             current_state.update(update_data)
-#             kv_set(db, key, json.dumps(current_state))
-#             return f"Successfully updated project '{project_id}'."
-#         finally:
-#             close(db)
-#
-#     return AgentTool(
-#         name="update_project",
-#         description=(
-#             "Updates the state of an existing RAG project with new data "
-#             "(e.g., adding a plan, chunks_path, or status)."
-#         ),
-#         parameters={
-#             "type": "object",
-#             "properties": {
-#                 "project_id": {
-#                     "type": "string",
-#                     "description": "The ID of the project to update.",
-#                 },
-#                 "update_data": {
-#                     "type": "object",
-#                     "description": "A dictionary of fields to update in the project's state.",
-#                 },
-#             },
-#             "required": ["project_id", "update_data"],
-#         },
-#         handler=handler,
-#     )
 
 
 def tool_get_project() -> AgentTool:

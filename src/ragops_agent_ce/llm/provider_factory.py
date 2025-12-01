@@ -39,7 +39,7 @@ def _get_vertex_credentials(settings: Settings) -> dict:
 
 
 def get_provider(
-    settings: Settings | None = None, llm_provider: str | None = None
+    settings: Settings | None = None, llm_provider: str | None = None, model_name: str | None = None
 ) -> LLMModelAbstract:
     """
     Create LLM provider using donkit-llm ModelFactory.
@@ -66,7 +66,7 @@ def get_provider(
             provider="donkit", model_name=None, credentials=credentials
         )
 
-    model_name = cfg.llm_model or _get_default_model(provider_key)
+    model_name = model_name or cfg.llm_model or _get_default_model(provider_key)
 
     if provider_key == "openai":
         credentials = {

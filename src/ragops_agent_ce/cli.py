@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import re
 import shlex
 import time
 
@@ -37,6 +36,7 @@ from ragops_agent_ce.repl_helpers import (
     MCPEventHandler,
     build_stream_render_helper,
     format_timestamp,
+    render_markdown_to_rich,
 )
 from ragops_agent_ce.schemas.agent_schemas import AgentSettings
 from ragops_agent_ce.setup_wizard import run_setup_if_needed
@@ -151,31 +151,6 @@ def _time_str() -> str:
     return "[dim]" + time.strftime("[%H:%M]", time.localtime()) + "[/]"
 
 
-def _render_markdown_to_rich(text: str) -> str:
-    """Convert Markdown text to simple Rich markup without breaking formatting."""
-    # Simple markdown to rich markup conversion without full rendering
-    # This preserves the transcript panel formatting
-
-    # Bold: **text** -> [bold]text[/bold]
-    result = re.sub(r"\*\*(.+?)\*\*", r"[bold]\1[/bold]", text)
-
-    # Italic: *text* -> [italic]text[/italic] (but don't match list items)
-    result = re.sub(r"(?<!\*)\*([^\*\n]+?)\*(?!\*)", r"[italic]\1[/italic]", result)  # noqa
-
-    # Inline code: `text` -> [cyan]text[/cyan]
-    result = re.sub(r"`(.+?)`", r"[cyan]\1[/cyan]", result)
-
-    # Headers: ## text -> [bold cyan]text[/bold cyan]
-    result = re.sub(r"^#+\s+(.+)$", r"[bold cyan]\1[/bold cyan]", result, flags=re.MULTILINE)
-
-    # List items: - text or * text -> • text (with proper indentation preserved)
-    result = re.sub(r"^(\s*)[*-]\s+", r"\1• ", result, flags=re.MULTILINE)
-
-    # Numbered lists: 1. text -> 1. text (keep as is)
-
-    return result
-
-
 async def _astart_repl(
     *,
     system: str | None,
@@ -194,7 +169,7 @@ async def _astart_repl(
 
     # Try to get provider and validate credentials
     try:
-        prov = get_provider(settings, llm_provider=provider)
+        prov = get_provider(settings, llm_provider=provider, model_name=model)
     except (ValueError, FileNotFoundError, json.JSONDecodeError) as e:
         console.print(texts.ERROR_PROVIDER_INIT.format(provider=provider, error=e))
         console.print(texts.ERROR_CREDENTIALS_REQUIRED)
@@ -250,7 +225,7 @@ async def _astart_repl(
     await agent.ainit_mcp_tools()
     renderer.render_startup_screen()
 
-    rendered_welcome = _render_markdown_to_rich(texts.WELCOME_MESSAGE)
+    rendered_welcome = render_markdown_to_rich(texts.WELCOME_MESSAGE)
     render_helper.append_agent_message(rendered_welcome)
     while True:
         render_helper.render_current_screen()
@@ -417,6 +392,10 @@ async def _astart_repl(
                 # Add to history if we got a response
                 if reply and not interrupted:
                     history.append(Message(role="assistant", content=reply))
+                    # Apply markdown rendering to final accumulated content
+                    rendered_content = render_markdown_to_rich(display_content)
+                    render_helper.set_agent_line(response_index, rendered_content, "")
+                    render_helper.render_current_screen()
                 elif not interrupted and not reply:
                     # No reply but no interruption - likely an error was swallowed
                     error_msg = (
@@ -437,7 +416,7 @@ async def _astart_repl(
                     if reply:
                         history.append(Message(role="assistant", content=reply))
                         # Replace placeholder with actual response
-                        rendered_reply = _render_markdown_to_rich(reply)
+                        rendered_reply = render_markdown_to_rich(reply)
                         render_helper.set_agent_line(response_index, rendered_reply, "")
                     else:
                         # No reply - likely an error
