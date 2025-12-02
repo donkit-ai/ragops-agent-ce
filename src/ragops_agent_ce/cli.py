@@ -10,6 +10,7 @@ import typer
 from donkit.llm import Message, ModelCapability
 from loguru import logger
 from rich.console import Console
+from rich.text import Text
 
 from ragops_agent_ce import __version__, texts
 from ragops_agent_ce.agent.agent import LLMAgent, default_tools
@@ -126,7 +127,11 @@ def main(
             console.print(
                 f"[yellow]No model selected. Using default: [cyan]{model}[/cyan][/yellow]"
             )
-        asyncio.run(
+        # Use custom loop handling to allow interrupting generation without exiting agent
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        repl_task = loop.create_task(
             _astart_repl(
                 system=get_prompt(provider, debug=load_settings().log_level == "DEBUG"),
                 model=model,
@@ -135,6 +140,18 @@ def main(
                 show_checklist=show_checklist,
             )
         )
+
+        try:
+            while not repl_task.done():
+                try:
+                    loop.run_until_complete(repl_task)
+                except KeyboardInterrupt:
+                    # User pressed Ctrl+C
+                    # Cancel the task to interrupt current operation
+                    repl_task.cancel()
+                    # Loop continues to resume task and deliver cancellation
+        finally:
+            loop.close()
 
 
 @app.command()
@@ -229,7 +246,14 @@ async def _astart_repl(
     render_helper.append_agent_message(rendered_welcome)
     while True:
         render_helper.render_current_screen()
-        user_input = get_user_input()
+        try:
+            user_input = get_user_input()
+        except KeyboardInterrupt:
+            # User pressed Ctrl+C during input - show message and continue
+            console.print(
+                "\n[yellow]⚠ Input cancelled. Press Ctrl+C again or type :quit to exit[/yellow]"
+            )
+            continue
         if not user_input:
             continue
         if user_input == ":help":
@@ -345,9 +369,11 @@ async def _astart_repl(
             render_helper.render_current_screen()
             renderer.render_goodbye_screen()
             break
-        render_helper.append_user_line(user_input)
-        render_helper.render_current_screen()
+
+        # Wrap all user message processing in try-except to catch Ctrl+C anywhere
         try:
+            render_helper.append_user_line(user_input)
+            render_helper.render_current_screen()
             history.append(Message(role="user", content=user_input))
             # Use streaming if provider supports it
             if prov.supports_capability(ModelCapability.STREAMING):
@@ -374,11 +400,26 @@ async def _astart_repl(
                             response_index, display_content, temp_executing
                         )
                         render_helper.render_current_screen()
-                except KeyboardInterrupt:
+                except (KeyboardInterrupt, asyncio.CancelledError):
                     interrupted = True
-                    transcript[response_index] = (
-                        f"{format_timestamp()} [yellow]⚠ Generation interrupted by user[/yellow]"
-                    )
+                    # If we have partial content, save it and show it
+                    if reply:
+                        history.append(Message(role="assistant", content=reply))
+                        # Render what we have so far + interruption message
+                        rendered_content = render_markdown_to_rich(display_content)
+                        warning = Text("\n⚠ Generation interrupted by user", style="yellow")
+
+                        # Combine rendered content and warning
+                        from rich.console import Group
+
+                        combined = Group(rendered_content, warning)
+
+                        render_helper.set_agent_line(response_index, combined, "")
+                    else:
+                        transcript[response_index] = (
+                            f"{format_timestamp()} "
+                            f"[yellow]⚠ Generation interrupted by user[/yellow]"
+                        )
                 except Exception as e:
                     # Show error to user
                     error_msg = f"{format_timestamp()} [bold red]Error:[/bold red] {str(e)}"
@@ -424,7 +465,7 @@ async def _astart_repl(
                             f"{format_timestamp()} [bold red]Error:[/bold red] "
                             "No response from agent. Check logs for details."
                         )
-                except KeyboardInterrupt:
+                except (KeyboardInterrupt, asyncio.CancelledError):
                     console.print("\n[yellow]⚠ Generation interrupted by user[/yellow]")
                     transcript[response_index] = (
                         f"{format_timestamp()} [yellow]Generation interrupted[/yellow]"
@@ -435,6 +476,19 @@ async def _astart_repl(
                     logger.error(f"Error during agent response: {e}", exc_info=True)
                 render_helper.render_current_screen()
                 mcp_handler.clear_progress()
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            # User pressed Ctrl+C during agent execution - stop current operation
+            console.print(
+                "\n[yellow]⚠ Operation interrupted by user. Press Ctrl+C again to exit.[/yellow]"
+            )
+            render_helper.append_agent_message(
+                f"{format_timestamp()} [yellow]⚠ Operation interrupted by user[/yellow]"
+            )
+            render_helper.render_current_screen()
+            mcp_handler.clear_progress()
+            # Continue to next iteration - don't exit
+            # Note: continue statement works inside while loop, not for exceptions from outside
+            pass  # Just finish this iteration and loop continues naturally
         except Exception as e:
             render_helper.append_error(str(e))
             logger.error(f"Error in main loop: {e}", exc_info=True)

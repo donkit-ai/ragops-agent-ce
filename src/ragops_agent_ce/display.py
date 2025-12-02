@@ -121,7 +121,7 @@ def create_transcript_panel(
         content,
         title=f"[bold blue]{title}[/bold blue]",
         title_align="center",
-        border_style="green",
+        border_style="dim",
         expand=True,
         padding=(0, 1),
         **kwargs,
