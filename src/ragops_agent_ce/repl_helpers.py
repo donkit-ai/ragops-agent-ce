@@ -22,28 +22,83 @@ def format_timestamp() -> str:
 
 
 def render_markdown_to_rich(text: str) -> str:
-    """Convert Markdown text to simple Rich markup without breaking formatting."""
-    # Simple markdown to rich markup conversion without full rendering
-    # This preserves the transcript panel formatting
+    """Convert Markdown text to Rich markup with extended support."""
+    result = text
 
-    # Use non-greedy match and allow any characters except backtick
-    result = re.sub(r"`([^`]+)`", r"[cyan]\1[/cyan]", text)
+    # Step 1: Protect and render code blocks (```) first to avoid conflicts
+    code_blocks = []
 
-    # Bold: **text** -> [bold]text[/bold]
-    # Use non-greedy match and allow newlines with DOTALL flag
-    result = re.sub(r"\*\*([^\*]+?)\*\*", r"[bold]\1[/bold]", result)
+    def save_code_block(match):
+        lang = match.group(1).strip() if match.group(1) else ""
+        code = match.group(2)
+        idx = len(code_blocks)
+        # Use special character to avoid conflicts with markdown syntax
+        placeholder = f"\x00CODEBLOCK{idx}\x00"
 
-    # Italic: *text* -> [italic]text[/italic] (but don't match list items)
-    # Match single asterisks that aren't part of ** or list items
+        # Escape code content to prevent Rich markup interpretation
+        escaped_code = escape(code.rstrip("\n"))
+
+        # Render code block with opening/closing markers and colored content
+        if lang:
+            rendered = f"[dim]```{lang}[/dim]\n[green]{escaped_code}[/green]\n[dim]```[/dim]"
+        else:
+            rendered = f"[dim]```[/dim]\n[green]{escaped_code}[/green]\n[dim]```[/dim]"
+
+        code_blocks.append(rendered)
+        return placeholder
+
+    # Match ```lang\ncode\n``` or ```\ncode\n``` - support optional language
+    result = re.sub(r"```([^\n]*)\n(.*?)```", save_code_block, result, flags=re.DOTALL)
+
+    # Step 2: Inline code (must be before bold/italic to avoid conflicts)
+    result = re.sub(r"`([^`\n]+)`", r"[cyan]\1[/cyan]", result)
+
+    # Step 3: Strikethrough ~~text~~
+    result = re.sub(r"~~([^~]+)~~", r"[dim strike]\1[/dim strike]", result)
+
+    # Step 4: Bold and italic combinations
+    # Bold+Italic: ***text*** or ___text___ (allow multiline with DOTALL)
+    result = re.sub(r"\*\*\*(.+?)\*\*\*", r"[bold italic]\1[/bold italic]", result, flags=re.DOTALL)
+    result = re.sub(r"___(.+?)___", r"[bold italic]\1[/bold italic]", result, flags=re.DOTALL)
+
+    # Bold: **text** or __text__ (allow multiline with DOTALL)
+    result = re.sub(r"\*\*(.+?)\*\*", r"[bold]\1[/bold]", result, flags=re.DOTALL)
+    result = re.sub(r"__(.+?)__", r"[bold]\1[/bold]", result, flags=re.DOTALL)
+
+    # Italic: *text* or _text_ (but don't match list items or underscores in words)
+    result = re.sub(r"(?<!\w)_([^_\n]+?)_(?!\w)", r"[italic]\1[/italic]", result)
     result = re.sub(r"(?<!\*)\*([^\*\n]+?)\*(?!\*)", r"[italic]\1[/italic]", result)
 
-    # Headers: ## text -> [bold cyan]text[/bold cyan]
-    result = re.sub(r"^#+\s+(.+)$", r"[bold cyan]\1[/bold cyan]", result, flags=re.MULTILINE)
+    # Step 5: Headers with different levels and colors
+    result = re.sub(r"^######\s+(.+)$", r"[bold]\1[/bold]", result, flags=re.MULTILINE)
+    result = re.sub(r"^#####\s+(.+)$", r"[bold blue]\1[/bold blue]", result, flags=re.MULTILINE)
+    result = re.sub(r"^####\s+(.+)$", r"[bold cyan]\1[/bold cyan]", result, flags=re.MULTILINE)
+    result = re.sub(r"^###\s+(.+)$", r"[bold magenta]\1[/bold magenta]", result, flags=re.MULTILINE)
+    result = re.sub(r"^##\s+(.+)$", r"[bold yellow]\1[/bold yellow]", result, flags=re.MULTILINE)
+    result = re.sub(r"^#\s+(.+)$", r"[bold green]\1[/bold green]", result, flags=re.MULTILINE)
 
-    # List items: - text or * text -> • text (with proper indentation preserved)
-    result = re.sub(r"^(\s*)[*-]\s+", r"\1• ", result, flags=re.MULTILINE)
+    # Step 6: Blockquotes > text
+    result = re.sub(
+        r"^>\s+(.+)$", r"[dim]▎[/dim] [italic dim]\1[/italic dim]", result, flags=re.MULTILINE
+    )
 
-    # Numbered lists: 1. text -> 1. text (keep as is)
+    # Step 7: Horizontal rules ---, ***, ___
+    result = re.sub(
+        r"^(\s*)([-*_])\2{2,}\s*$", r"\1[dim]─────────────────[/dim]", result, flags=re.MULTILINE
+    )
+
+    # Step 8: Links [text](url) - show both text and url
+    result = re.sub(r"\[([^\]]+)\]\(([^\)]+)\)", r"[link=\2]\1[/link] [dim](\2)[/dim]", result)
+
+    # Step 9: List items with bullet points
+    # Unordered: - text or * text -> • text (preserve indentation)
+    result = re.sub(r"^(\s*)[-*]\s+", r"\1[yellow]•[/yellow] ", result, flags=re.MULTILINE)
+    # Ordered: 1. text -> highlight number
+    result = re.sub(r"^(\s*)(\d+)\.\s+", r"\1[cyan]\2.[/cyan] ", result, flags=re.MULTILINE)
+
+    # Step 10: Restore code blocks
+    for i, code_block in enumerate(code_blocks):
+        result = result.replace(f"\x00CODEBLOCK{i}\x00", code_block)
 
     return result
 
