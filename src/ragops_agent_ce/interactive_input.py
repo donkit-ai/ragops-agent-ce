@@ -123,22 +123,53 @@ class CommandCompleter(Completer):
                     style="class:command",
                 )
 
-            # 2. Absolute Path Completion
-            # Only show absolute paths if:
-            # - We are not at the bare root '/' (reduces clutter)
-            # - OR if no commands match (so we can still navigate /bin if needed)
-            # - OR if the user has typed a subdirectory separator (e.g. /bin/)
-            if len(text) > 1 and (not has_commands or "/" in query or query == ""):
+            # 2. Absolute Path Completion (fallback if no commands)
+            # Only show if no commands match and user is typing a path-like structure
+            if len(text) > 1 and (not has_commands or "/" in query):
                 yield from self.path_completer.get_completions(document, complete_event)
 
-        # 3. Relative/Home Path Completion (Start of line or arguments)
-        # Trigger if word starts with . or ~
-        elif word.startswith((".", "~")):
-            yield from self.path_completer.get_completions(document, complete_event)
+        # 3. File Navigation via '@' trigger
+        # If word starts with @, trigger path completion
+        elif word.startswith("@"):
+            # Create a temp document without the '@' prefix for the path completer
+            from prompt_toolkit.document import Document
+
+            # content after @
+            path_query = word[1:]
+
+            # We need to get completions for 'path_text'
+            # Since PathCompleter takes (document, event), we need a proxy document
+
+            # Reconstruct document line without the leading @ of the current word
+            # This is complex because we need to find where the word starts
+            word_start_pos = text.rfind(word)
+            if word_start_pos == -1:
+                word_start_pos = 0
+
+            # New text: ... [path_text] ...
+            # effectively removing @ from the current position
+
+            # Use get_completions with a modified document
+            new_text_before_cursor = text[:word_start_pos] + path_query
+            new_doc = Document(
+                text=new_text_before_cursor + document.text_after_cursor,
+                cursor_position=len(new_text_before_cursor),
+            )
+
+            for completion in self.path_completer.get_completions(new_doc, complete_event):
+                # We need to adjust the completion to replace the @ as well
+                # completion.start_position is relative to cursor in new_doc
+
+                yield Completion(
+                    completion.text,
+                    start_position=completion.start_position,
+                    display=completion.display,
+                    display_meta=completion.display_meta,
+                    style=completion.style,
+                )
 
         # 4. Absolute Path Completion (Arguments - anywhere in line)
-        # If we are not at start of line, but word starts with /, treat as path
-        elif word.startswith("/"):
+        elif word.startswith(("/", ".", "~")):
             yield from self.path_completer.get_completions(document, complete_event)
 
 
@@ -190,11 +221,11 @@ class InteractiveInputBox:
             buffer.insert_text("/")
             buffer.start_completion()
 
-        @bindings.add(".")
+        @bindings.add("@")
         def _(event):
-            """Insert '.' and trigger file completion."""
+            """Insert '@' and trigger file completion."""
             buffer = event.current_buffer
-            buffer.insert_text(".")
+            buffer.insert_text("@")
             buffer.start_completion()
 
         @bindings.add("escape")
@@ -231,7 +262,7 @@ class InteractiveInputBox:
                 ("class:bottom-toolbar", " "),
                 ("class:bottom-toolbar.key", "/"),
                 ("class:bottom-toolbar", " Commands "),
-                ("class:bottom-toolbar.key", "~/"),
+                ("class:bottom-toolbar.key", "@"),
                 ("class:bottom-toolbar", " Files "),
                 ("class:bottom-toolbar.key", "Tab"),
                 ("class:bottom-toolbar", " Complete "),
@@ -266,16 +297,24 @@ class InteractiveInputBox:
 
             # Check if result is a path and expand it
             if result and (
-                result.startswith("~") or result.startswith("/") or result.startswith(".")
+                result.startswith("~")
+                or result.startswith("/")
+                or result.startswith(".")
+                or result.startswith("@")
             ):
+                # If starts with @, remove it before expansion
+                is_at_trigger = result.startswith("@")
+                path_to_check = result[1:] if is_at_trigger else result
+
                 try:
-                    expanded_path = os.path.abspath(os.path.expanduser(result))
-                    if os.path.exists(expanded_path):
+                    expanded_path = os.path.abspath(os.path.expanduser(path_to_check))
+                    if is_at_trigger or os.path.exists(expanded_path):
                         return expanded_path
                 except Exception as ex:
-                    logger.warning(f"Failed to expand absolute path: {ex}")
-                    pass
-
+                    logger.warning(f"Failed to expand path '{result}': {ex}")
+                    # For @ trigger, at least return the path without @
+                    if is_at_trigger:
+                        return path_to_check
             return result
         except (KeyboardInterrupt, EOFError):
             raise KeyboardInterrupt
