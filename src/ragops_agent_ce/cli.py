@@ -7,7 +7,7 @@ import shlex
 import time
 
 import typer
-from donkit.llm import Message, ModelCapability
+from donkit.llm import GenerateRequest, Message, ModelCapability
 from loguru import logger
 from rich.console import Console
 from rich.text import Text
@@ -46,6 +46,51 @@ app = typer.Typer(
     pretty_exceptions_enable=False,
 )
 console = Console()
+
+HISTORY_COMPRESSION_THRESHOLD = 5  # Compress when user messages exceed this
+HISTORY_KEEP_RECENT = 1  # Keep last N messages after compression
+
+HISTORY_SUMMARY_PROMPT = """Summarize this conversation concisely.
+Preserve ALL key information: file paths, project names, configurations, decisions, errors.
+Format as bullet points. Be brief but complete."""
+
+
+async def compress_history_if_needed(
+    history: list[Message],
+    prov: LLMProviderAbstract,  # noqa: F821
+) -> list[Message]:
+    """Compress history when it exceeds threshold by generating a summary."""
+    user_msg_count = sum(1 for m in history if m.role == "user")
+    if user_msg_count <= HISTORY_COMPRESSION_THRESHOLD:
+        return history
+
+    # Separate system messages and conversation
+    system_msgs = [m for m in history if m.role == "system"]
+    conversation_msgs = [m for m in history if m.role != "system"]
+
+    # Keep last N messages
+    msgs_to_summarize = conversation_msgs[:-HISTORY_KEEP_RECENT]
+    msgs_to_keep = conversation_msgs[-HISTORY_KEEP_RECENT:]
+
+    if not msgs_to_summarize:
+        return history
+
+    # Generate summary using LLM - pass conversation as messages
+    try:
+        request = GenerateRequest(
+            messages=msgs_to_summarize + [Message(role="user", content=HISTORY_SUMMARY_PROMPT)]
+        )
+        response = await prov.generate(request)
+        summary = response.content or ""
+        summary_text = f"[CONVERSATION HISTORY SUMMARY]\n{summary}\n[END SUMMARY]"
+
+        # Build new history: system + summary + recent messages
+        new_history = system_msgs + [Message(role="assistant", content=summary_text)] + msgs_to_keep
+        logger.info(f"Compressed history: {len(history)} -> {len(new_history)} messages")
+        return new_history
+    except Exception as e:
+        logger.warning(f"Failed to compress history: {e}")
+        return history
 
 
 def version_callback(value: bool) -> None:
@@ -260,6 +305,10 @@ async def _astart_repl(
             transcript += texts.HELP_COMMANDS
             continue
         if user_input == ":clear":
+            # Keep only system messages, clear conversation
+            system_msgs = [m for m in history if m.role == "system"]
+            history.clear()
+            history.extend(system_msgs)
             transcript.clear()
             continue
         if user_input == ":provider":
@@ -448,6 +497,8 @@ async def _astart_repl(
                         transcript.append(error_msg)
                     render_helper.render_current_screen()
                 mcp_handler.clear_progress()
+                # Compress history if needed
+                history[:] = await compress_history_if_needed(history, prov)
             else:
                 # Fall back to non-streaming mode
                 # Add placeholder
@@ -476,6 +527,8 @@ async def _astart_repl(
                     logger.error(f"Error during agent response: {e}", exc_info=True)
                 render_helper.render_current_screen()
                 mcp_handler.clear_progress()
+                # Compress history if needed
+                history[:] = await compress_history_if_needed(history, prov)
         except (KeyboardInterrupt, asyncio.CancelledError):
             # User pressed Ctrl+C during agent execution - stop current operation
             console.print(

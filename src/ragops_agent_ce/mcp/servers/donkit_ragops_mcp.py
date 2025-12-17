@@ -6,6 +6,7 @@ This server uses FastMCP's mounting feature to combine multiple servers:
 - compose: Docker compose service management
 - planner: RAG config planning
 - query: RAG query execution
+- evaluation: RAG evaluation (batch CSV processing)
 - reader: Document reading/parsing
 - vectorstore: Vector store loading
 
@@ -41,6 +42,7 @@ from fastmcp import FastMCP
 from .chunker_server import server as chunker_server
 from .compose_manager_server import server as compose_server
 from .planner_server import server as planner_server
+from .rag_evaluation_server import server as evaluation_server
 from .rag_query_server import server as query_server
 from .read_engine_server import server as reader_server
 from .vectorstore_loader_server import server as vectorstore_server
@@ -54,6 +56,7 @@ unified_server.mount(chunker_server, prefix="chunker")
 unified_server.mount(compose_server, prefix="compose")
 unified_server.mount(planner_server, prefix="planner")
 unified_server.mount(query_server, prefix="query")
+unified_server.mount(evaluation_server, prefix="evaluation")
 unified_server.mount(reader_server, prefix="reader")
 unified_server.mount(vectorstore_server, prefix="vectorstore")
 

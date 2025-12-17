@@ -29,12 +29,13 @@ donkit-vectorstore-loader = "^0.1.7"
 donkit-embeddings = "^0.1.4"
 langchain-openai = "^0.3.35"
 langchain-community = "^0.3.31"
-donkit-read-engine = "^0.2.5"
+donkit-read-engine = "^0.2.6"
 fastmcp = "^2.13.0.2"
-donkit-ragops-api-gateway-client = "^0.1.5"
+donkit-ragops-api-gateway-client = "^0.1.6"
 nest-asyncio = "^1.6.0"
-donkit-llm = "^0.1.4"
+donkit-llm = "^0.1.6"
 prompt-toolkit = "^3.0.48"
+toonify = {extras = ["pydantic"], version = "^1.5.1"}
 
 
 [tool.poetry.scripts]

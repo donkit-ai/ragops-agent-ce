@@ -35,6 +35,19 @@ test-trackers = ["comet-ml", "dvclive", "matplotlib", "swanlab[dashboard]", "ten
 testing = ["bitsandbytes", "datasets", "diffusers", "evaluate", "parameterized", "pytest (>=7.2.0)", "pytest-order", "pytest-subtests", "pytest-xdist", "scikit-learn", "scipy", "timm", "torchdata (>=0.8.0)", "torchpippy (>=0.2.0)", "tqdm", "transformers"]
 
 [[package]]
+name = "aiofiles"
+version = "25.1.0"
+description = "File support for asyncio."
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "python_version == \"3.12\" or python_version >= \"3.13\""
+files = [
+    {file = "aiofiles-25.1.0-py3-none-any.whl", hash = "sha256:abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695"},
+    {file = "aiofiles-25.1.0.tar.gz", hash = "sha256:a8d728f0a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2"},
+]
+
+[[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
 description = "Happy Eyeballs for asyncio"
@@ -1475,38 +1488,40 @@ files = [
 
 [[package]]
 name = "donkit-chunker"
-version = "0.1.4"
+version = "0.1.5"
 description = "Chunking utilities for Donkit RagOps pipelines"
 optional = false
 python-versions = "<4.0,>=3.12"
 groups = ["main"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
-    {file = "donkit_chunker-0.1.4-py3-none-any.whl", hash = "sha256:1a9d289c5f51c6608278a1edec165bad659ae25a14dc0cab205a5a5ddcc188fb"},
-    {file = "donkit_chunker-0.1.4.tar.gz", hash = "sha256:3494dd88b4adaabad2e7a5a29578724b85c7266363e181676e5bc016d4e175b2"},
+    {file = "donkit_chunker-0.1.5-py3-none-any.whl", hash = "sha256:320db8d3ffaffa5cfbfef29a74377abda482e90bc3f6bb36475b3016eb8e6cab"},
+    {file = "donkit_chunker-0.1.5.tar.gz", hash = "sha256:1b97e89b038de62e6d763ac1aacf6446c7aeb43e8d304447fa55ed74ef83d335"},
 ]
 
 [package.dependencies]
+aiofiles = ">=25.1.0,<26.0.0"
 langchain-core = ">=0.3.27,<0.4.0"
+langchain-experimental = ">=0.3.4,<0.4.0"
 langchain-text-splitters = ">=0.3.0,<0.4.0"
 loguru = ">=0.7.3,<0.8.0"
 pydantic = ">=2.7.4,<3.0.0"
 
 [[package]]
 name = "donkit-embeddings"
-version = "0.1.4"
+version = "0.1.5"
 description = "Custom embeddings implementations for Donkit RagOps"
 optional = false
 python-versions = "<3.14,>=3.12"
 groups = ["main"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
-    {file = "donkit_embeddings-0.1.4-py3-none-any.whl", hash = "sha256:adf7c8282ec106e9224558ff5378dd442e32d48fd3081bf420a59d31a0b4a41b"},
-    {file = "donkit_embeddings-0.1.4.tar.gz", hash = "sha256:f3fc7cd262850dca7cc4997b81fdf887c917b769139e51de38ca4bbc3ed51c62"},
+    {file = "donkit_embeddings-0.1.5-py3-none-any.whl", hash = "sha256:9509983d3e5d755921a4095e2ec10ad8e98e632b21c691dc2e4e8c84799b59c4"},
+    {file = "donkit_embeddings-0.1.5.tar.gz", hash = "sha256:af8449d02036b093e6f260290f159b582830b87f0c133c9f310f71236df2b7ee"},
 ]
 
 [package.dependencies]
-donkit-llm = ">=0.1.2,<0.2.0"
+donkit-llm = ">=0.1.5,<0.2.0"
 google-genai = ">=1.38.0,<2.0.0"
 langchain-core = ">=0.3.79,<0.4.0"
 ollama = ">=0.6.0,<0.7.0"
@@ -1514,15 +1529,15 @@ openai = ">=2.1.0,<3.0.0"
 
 [[package]]
 name = "donkit-llm"
-version = "0.1.4"
+version = "0.1.6"
 description = "Unified LLM model implementations for Donkit (OpenAI, Azure OpenAI, Claude, Vertex AI, Ollama)"
 optional = false
 python-versions = "<3.14,>=3.12"
 groups = ["main"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
-    {file = "donkit_llm-0.1.4-py3-none-any.whl", hash = "sha256:7af76ccebd40d16d530642a48a2efd020f9d92eed44ce6dbeca3db2696614a23"},
-    {file = "donkit_llm-0.1.4.tar.gz", hash = "sha256:02ce1adde24f67ca1cd55fed011936b708766bbc3c48350342443f0fefd41e4c"},
+    {file = "donkit_llm-0.1.6-py3-none-any.whl", hash = "sha256:add6af0259b46c6c589752e0acb9d253d937436d9ffb103b2578d3edea7f1e94"},
+    {file = "donkit_llm-0.1.6.tar.gz", hash = "sha256:44177599e444b956558435957cc175ca3ce3a6a199c26abc95363f43f26de2e8"},
 ]
 
 [package.dependencies]
@@ -1535,15 +1550,15 @@ pydantic = ">=2.8.0,<3.0.0"
 
 [[package]]
 name = "donkit-ragops-api-gateway-client"
-version = "0.1.5"
+version = "0.1.6"
 description = "Async HTTP client for interacting with the Donkit ragops-api-gateway"
 optional = false
 python-versions = "<3.14,>=3.12"
 groups = ["main"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
-    {file = "donkit_ragops_api_gateway_client-0.1.5-py3-none-any.whl", hash = "sha256:7eec3e675f04b26a853b08cb1f8846b143c34b048d7471d46e0903e4c0e205de"},
-    {file = "donkit_ragops_api_gateway_client-0.1.5.tar.gz", hash = "sha256:8864d3779af221495c531a6d0d638bfbe5c98d54308ce8f66ba6a8b9cae0892b"},
+    {file = "donkit_ragops_api_gateway_client-0.1.6-py3-none-any.whl", hash = "sha256:fdd5baea049533fa7dcadb6e1440e3b2a5e1c9ffc11f5763b89de37a1740ed58"},
+    {file = "donkit_ragops_api_gateway_client-0.1.6.tar.gz", hash = "sha256:19190a53b89babd93c8993d8ed08c378d0af32b37d58beb8b65393ce28c1883a"},
 ]
 
 [package.dependencies]
@@ -1553,15 +1568,15 @@ websockets = ">=15.0.1,<16.0.0"
 
 [[package]]
 name = "donkit-read-engine"
-version = "0.2.5"
+version = "0.2.6"
 description = "Document loading helpers for Donkit RagOps"
 optional = false
 python-versions = "<3.14,>=3.12"
 groups = ["main"]
 markers = "python_version == \"3.12\" or python_version >= \"3.13\""
 files = [
-    {file = "donkit_read_engine-0.2.5-py3-none-any.whl", hash = "sha256:753a5309e86f0faeee6219cf9179b1d1246bf0deb0ff89629c4d17bf43418bd6"},
-    {file = "donkit_read_engine-0.2.5.tar.gz", hash = "sha256:432834a992f2868ec308a6ff37a548211105ba04e2c1f4777e18b377610bf700"},
+    {file = "donkit_read_engine-0.2.6-py3-none-any.whl", hash = "sha256:d8f49356b328c1bb77b2a7a1161e07a1873f343c1ba43758cda014899cd2f821"},
+    {file = "donkit_read_engine-0.2.6.tar.gz", hash = "sha256:106d0702910098530b4402b939c4e4f12c6f067cbd24ac6c80617b25d30e64a4"},
 ]
 
 [package.dependencies]
@@ -3378,6 +3393,23 @@ pydantic = ">=2.7.4,<3.0.0"
 PyYAML = ">=5.3.0,<7.0.0"
 tenacity = ">=8.1.0,<8.4.0 || >8.4.0,<10.0.0"
 typing-extensions = ">=4.7.0,<5.0.0"
+
+[[package]]
+name = "langchain-experimental"
+version = "0.3.4"
+description = "Building applications with LLMs through composability"
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+markers = "python_version == \"3.12\" or python_version >= \"3.13\""
+files = [
+    {file = "langchain_experimental-0.3.4-py3-none-any.whl", hash = "sha256:2e587306aea36b60fa5e5fc05dc7281bee9f60a806f0bf9d30916e0ee096af80"},
+    {file = "langchain_experimental-0.3.4.tar.gz", hash = "sha256:937c4259ee4a639c618d19acf0e2c5c2898ef127050346edc5655259aa281a21"},
+]
+
+[package.dependencies]
+langchain-community = ">=0.3.0,<0.4.0"
+langchain-core = ">=0.3.28,<0.4.0"
 
 [[package]]
 name = "langchain-openai"
@@ -8557,6 +8589,28 @@ docs = ["setuptools-rust", "sphinx", "sphinx-rtd-theme"]
 testing = ["black (==22.3)", "datasets", "numpy", "pytest", "pytest-asyncio", "requests", "ruff"]
 
 [[package]]
+name = "toonify"
+version = "1.5.1"
+description = "TOON (Token-Oriented Object Notation) - A compact, human-readable serialization format for LLMs"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+markers = "python_version == \"3.12\" or python_version >= \"3.13\""
+files = [
+    {file = "toonify-1.5.1-py3-none-any.whl", hash = "sha256:38d6fb003196a1fa5577387be4d322152e32a959cf7389b1849e379d465346e3"},
+    {file = "toonify-1.5.1.tar.gz", hash = "sha256:25142f4185f28221288d8782bcbaa28a161a027cb022bfa1e77e787ecf5da93c"},
+]
+
+[package.dependencies]
+pydantic = {version = ">=1.10.0", optional = true, markers = "extra == \"pydantic\""}
+tiktoken = ">=0.5.0"
+
+[package.extras]
+all = ["pydantic (>=1.10.0)"]
+dev = ["black (>=24.0.0)", "isort (>=5.13.0)", "poethepoet (>=0.29.0)", "pylint (>=3.3.0)", "pytest (>=7.0.0)", "pytest-cov (>=4.0.0)", "ruff (>=0.8.0)"]
+pydantic = ["pydantic (>=1.10.0)"]
+
+[[package]]
 name = "torch"
 version = "2.7.1"
 description = "Tensors and Dynamic neural networks in Python with strong GPU acceleration"
@@ -10062,4 +10116,4 @@ cffi = ["cffi (>=1.17,<2.0)", "cffi (>=2.0.0b)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.14"
-content-hash = "357c496bcf6465d63de1e8c5cf827438ef0e2f522140c38c190215d0447b0889"
+content-hash = "9106ae1246ea98af10b5ed7108395c26004564f08a338eec032f65fe6e80a267"

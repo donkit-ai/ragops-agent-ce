@@ -222,15 +222,17 @@ class MCPClient:
             logger.warning(f"Tool {name} execution was cancelled")
             raise
         except KeyboardInterrupt:
-            # Convert KeyboardInterrupt to CancelledError for proper async handling
             logger.warning(f"Tool {name} execution interrupted by user")
-            raise asyncio.CancelledError(f"Tool {name} execution cancelled by user")
+            raise
         finally:
             # Ensure transport cleanup even on interruption
             if hasattr(transport, "_process") and transport._process:
                 try:
                     transport._process.terminate()
-                    await asyncio.sleep(0.1)  # Give it time to terminate
+                    try:
+                        await asyncio.sleep(0.1)  # Give it time to terminate
+                    except asyncio.CancelledError:
+                        pass
                     if transport._process.poll() is None:
                         transport._process.kill()
                 except Exception as e:
@@ -247,8 +249,7 @@ class MCPClient:
             return result
         except KeyboardInterrupt:
             logger.warning(f"Tool {name} execution interrupted by user")
-            # Don't re-raise - let it be handled as cancellation
-            raise asyncio.CancelledError(f"Tool {name} execution cancelled by user")
+            raise
         finally:
             # Ensure any remaining event loop cleanup happens
             try:
