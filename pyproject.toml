@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "donkit-ragops-ce"
-version = "0.3.17"
+version = "0.3.18"
 description = "Community Edition CLI agent for building RAG pipelines"
 authors = ["Donkit AI <opensource@donkit.ai>"]
 license = "MIT"
