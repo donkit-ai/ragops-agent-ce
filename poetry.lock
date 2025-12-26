@@ -35,19 +35,6 @@ test-trackers = ["comet-ml", "dvclive", "matplotlib", "swanlab[dashboard]", "ten
 testing = ["bitsandbytes", "datasets", "diffusers", "evaluate", "parameterized", "pytest (>=7.2.0)", "pytest-order", "pytest-subtests", "pytest-xdist", "scikit-learn", "scipy", "timm", "torchdata (>=0.8.0)", "torchpippy (>=0.2.0)", "tqdm", "transformers"]
 
 [[package]]
-name = "aiofiles"
-version = "25.1.0"
-description = "File support for asyncio."
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-markers = "python_version == \"3.12\" or python_version == \"3.13\""
-files = [
-    {file = "aiofiles-25.1.0-py3-none-any.whl", hash = "sha256:abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695"},
-    {file = "aiofiles-25.1.0.tar.gz", hash = "sha256:a8d728f0a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2"},
-]
-
-[[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
 description = "Happy Eyeballs for asyncio"
@@ -1502,37 +1489,34 @@ files = [
 
 [[package]]
 name = "donkit-chunker"
-version = "0.1.7"
+version = "0.1.4"
 description = "Chunking utilities for Donkit RagOps pipelines"
 optional = false
 python-versions = "<4.0,>=3.12"
 groups = ["main"]
 markers = "python_version == \"3.12\" or python_version == \"3.13\""
 files = [
-    {file = "donkit_chunker-0.1.7-py3-none-any.whl", hash = "sha256:9c79f6320aba2f9939aae5f30e464f78d26bc2de5ae5664ec8c83d67912835f9"},
-    {file = "donkit_chunker-0.1.7.tar.gz", hash = "sha256:bc8017c8309423e435e046ebd13488f6ed78a05ed0de4d2d55beb8175d179513"},
+    {file = "donkit_chunker-0.1.4-py3-none-any.whl", hash = "sha256:1a9d289c5f51c6608278a1edec165bad659ae25a14dc0cab205a5a5ddcc188fb"},
+    {file = "donkit_chunker-0.1.4.tar.gz", hash = "sha256:3494dd88b4adaabad2e7a5a29578724b85c7266363e181676e5bc016d4e175b2"},
 ]
 
 [package.dependencies]
-aiofiles = ">=25.1.0,<26.0.0"
 langchain-core = ">=0.3.27,<0.4.0"
-langchain-experimental = ">=0.3.4,<0.4.0"
 langchain-text-splitters = ">=0.3.0,<0.4.0"
 loguru = ">=0.7.3,<0.8.0"
 pydantic = ">=2.7.4,<3.0.0"
-toonify = {version = ">=1.5.1,<2.0.0", extras = ["pydantic"]}
 
 [[package]]
 name = "donkit-embeddings"
-version = "0.1.9"
+version = "0.1.10"
 description = "Custom embeddings implementations for Donkit RagOps"
 optional = false
 python-versions = "<3.14,>=3.12"
 groups = ["main"]
 markers = "python_version == \"3.12\" or python_version == \"3.13\""
 files = [
-    {file = "donkit_embeddings-0.1.9-py3-none-any.whl", hash = "sha256:5a7f449b3dde1108f65c0f9303e491c4fd2196f7cb7b87ea3e2f451a0390e2ce"},
-    {file = "donkit_embeddings-0.1.9.tar.gz", hash = "sha256:d2eedada5ae8f9e179f4c1666aef09ccc64eb20dbc5b8086053e3deceac53d75"},
+    {file = "donkit_embeddings-0.1.10-py3-none-any.whl", hash = "sha256:aada9578c2ba8d9b56e70fe3508e0e48d2b656c61d80761f83f001de33dee89d"},
+    {file = "donkit_embeddings-0.1.10.tar.gz", hash = "sha256:398b6baa1072ca732be43522af57786cb473918bf05ab7b601171d1d189bdb43"},
 ]
 
 [package.dependencies]
@@ -1544,15 +1528,15 @@ openai = ">=2.1.0,<3.0.0"
 
 [[package]]
 name = "donkit-llm"
-version = "0.1.8"
+version = "0.1.9"
 description = "Unified LLM model implementations for Donkit (OpenAI, Azure OpenAI, Claude, Vertex AI, Ollama)"
 optional = false
 python-versions = "<3.14,>=3.12"
 groups = ["main"]
 markers = "python_version == \"3.12\" or python_version == \"3.13\""
 files = [
-    {file = "donkit_llm-0.1.8-py3-none-any.whl", hash = "sha256:b0542d4d6736e317a7b9a6d732fed88a878f9838bb67b1c50c6645ffbffab884"},
-    {file = "donkit_llm-0.1.8.tar.gz", hash = "sha256:dd1ae216fef8e2a6743430cae142397fb867282dd72af1651961c700394547d7"},
+    {file = "donkit_llm-0.1.9-py3-none-any.whl", hash = "sha256:4883ae061daf35f6c488d9702a4d801d6534cfc237512178c35b0646221a2950"},
+    {file = "donkit_llm-0.1.9.tar.gz", hash = "sha256:fa78f7ba381ee373369120ffe1e23a4e346ac3f8e991db2ccfa8331d0dd6587f"},
 ]
 
 [package.dependencies]
@@ -3439,23 +3423,6 @@ pydantic = ">=2.7.4,<3.0.0"
 PyYAML = ">=5.3.0,<7.0.0"
 tenacity = ">=8.1.0,<8.4.0 || >8.4.0,<10.0.0"
 typing-extensions = ">=4.7.0,<5.0.0"
-
-[[package]]
-name = "langchain-experimental"
-version = "0.3.4"
-description = "Building applications with LLMs through composability"
-optional = false
-python-versions = "<4.0,>=3.9"
-groups = ["main"]
-markers = "python_version == \"3.12\" or python_version == \"3.13\""
-files = [
-    {file = "langchain_experimental-0.3.4-py3-none-any.whl", hash = "sha256:2e587306aea36b60fa5e5fc05dc7281bee9f60a806f0bf9d30916e0ee096af80"},
-    {file = "langchain_experimental-0.3.4.tar.gz", hash = "sha256:937c4259ee4a639c618d19acf0e2c5c2898ef127050346edc5655259aa281a21"},
-]
-
-[package.dependencies]
-langchain-community = ">=0.3.0,<0.4.0"
-langchain-core = ">=0.3.28,<0.4.0"
 
 [[package]]
 name = "langchain-openai"
@@ -10413,4 +10380,4 @@ cffi = ["cffi (>=1.17,<2.0)", "cffi (>=2.0.0b)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.14"
-content-hash = "f593c0b1bdb8fd663e2a0f9596db6c21940e49a29f2378322b3a3005621792aa"
+content-hash = "a22423b26feb140bf8bd8d0e47a0279f7c23f90010cb1dd99bcabdab5d214510"
