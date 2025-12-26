@@ -31,9 +31,10 @@ htmlcov/
 .stakpak
 
 ragops_checklists/
-ragops-agent-ce/
+donkit-ragops/
 vertex_service_account.json
 image_cache.json
 projects/
 docs/
 /poetry.lock
+.claude/

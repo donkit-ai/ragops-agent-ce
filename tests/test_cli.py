@@ -12,7 +12,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-from ragops_agent_ce.cli import app
+from donkit_ragops.cli import app
 from typer.testing import CliRunner
 
 runner = CliRunner()
@@ -52,7 +52,7 @@ def test_cli_ping_help() -> None:
 # ============================================================================
 
 
-@patch("ragops_agent_ce.cli.run_setup_if_needed")
+@patch("donkit_ragops.cli.run_setup_if_needed")
 def test_cli_setup_flag(mock_setup: MagicMock) -> None:
     """Test --setup flag invokes setup wizard."""
     mock_setup.return_value = True
@@ -63,7 +63,7 @@ def test_cli_setup_flag(mock_setup: MagicMock) -> None:
     mock_setup.assert_called_once_with(force=True)
 
 
-@patch("ragops_agent_ce.cli.run_setup_if_needed")
+@patch("donkit_ragops.cli.run_setup_if_needed")
 def test_cli_setup_returns_false(mock_setup: MagicMock) -> None:
     """Test setup wizard failure."""
     mock_setup.return_value = False

@@ -13,8 +13,8 @@ import json
 from typing import Any, AsyncIterator
 
 import pytest
-from ragops_agent_ce.agent.agent import LLMAgent
-from ragops_agent_ce.agent.local_tools.tools import AgentTool
+from donkit_ragops.agent.agent import LLMAgent
+from donkit_ragops.agent.local_tools.tools import AgentTool
 from donkit.llm import LLMModelAbstract, StreamChunk
 from donkit.llm import GenerateRequest
 from donkit.llm import GenerateResponse

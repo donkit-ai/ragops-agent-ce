@@ -66,13 +66,13 @@ Pre-configured MCP client mock with common setup. Eliminates repetitive patching
 
 **Before:**
 ```python
-with patch("ragops_agent_ce.mcp.client.Client") as mock_client_class:
+with patch("donkit_ragops.mcp.client.Client") as mock_client_class:
     mock_client_instance = AsyncMock()
     mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
     mock_client_instance.__aexit__ = AsyncMock(return_value=None)
     mock_client_class.return_value = mock_client_instance
     
-    with patch("ragops_agent_ce.mcp.client.StdioTransport"):
+    with patch("donkit_ragops.mcp.client.StdioTransport"):
         # test code
 ```
 
@@ -92,9 +92,9 @@ Pre-patched CLI dependencies for testing.
 
 **Before:**
 ```python
-@patch("ragops_agent_ce.cli.run_setup_if_needed")
-@patch("ragops_agent_ce.cli.select_model_at_startup")
-@patch("ragops_agent_ce.cli._astart_repl")
+@patch("donkit_ragops.cli.run_setup_if_needed")
+@patch("donkit_ragops.cli.select_model_at_startup")
+@patch("donkit_ragops.cli._astart_repl")
 def test_cli_something(mock_repl, mock_select, mock_setup):
     mock_setup.return_value = True
     mock_select.return_value = ("openai", "gpt-4")

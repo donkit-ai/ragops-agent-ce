@@ -6,21 +6,28 @@ import json
 import tempfile
 from pathlib import Path
 from typing import Generator
-from unittest.mock import Mock
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
-from ragops_agent_ce.agent.local_tools.tools import tool_db_get
-from ragops_agent_ce.agent.local_tools.tools import tool_grep
-from ragops_agent_ce.agent.local_tools.tools import tool_interactive_user_choice
-from ragops_agent_ce.agent.local_tools.tools import tool_interactive_user_confirm
-from ragops_agent_ce.agent.local_tools.tools import tool_list_directory
-from ragops_agent_ce.agent.local_tools.tools import tool_read_file
-from ragops_agent_ce.agent.local_tools.tools import tool_time_now
-from ragops_agent_ce.db import DB
-from ragops_agent_ce.db import close
-from ragops_agent_ce.db import kv_set
-from ragops_agent_ce.db import migrate
+from donkit_ragops.agent.local_tools.checklist_tools import (
+    tool_create_checklist,
+    tool_update_checklist_item,
+)
+from donkit_ragops.agent.local_tools.tools import (
+    tool_db_get,
+    tool_grep,
+    tool_interactive_user_choice,
+    tool_interactive_user_confirm,
+    tool_list_directory,
+    tool_read_file,
+    tool_time_now,
+)
+from donkit_ragops.checklist_manager import (
+    ChecklistStatusLine,
+    ChecklistStatusProvider,
+    checklist_status_provider,
+)
+from donkit_ragops.db import DB, close, kv_set, migrate
 
 # ============================================================================
 # Fixtures
@@ -329,7 +336,7 @@ def test_tool_db_get_existing_key(db: DB, temp_db_path: Path) -> None:
     kv_set(db, "test_key", "test_value")
 
     # Patch open_db to return our test db
-    with patch("ragops_agent_ce.agent.local_tools.tools.open_db") as mock_open_db:
+    with patch("donkit_ragops.agent.local_tools.tools.open_db") as mock_open_db:
         mock_open_db.return_value = db
         tool = tool_db_get()
         result = tool.handler({"key": "test_key"})
@@ -339,7 +346,7 @@ def test_tool_db_get_existing_key(db: DB, temp_db_path: Path) -> None:
 
 def test_tool_db_get_nonexistent_key(db: DB) -> None:
     """Test getting a non-existent key returns empty string."""
-    with patch("ragops_agent_ce.agent.local_tools.tools.open_db") as mock_open_db:
+    with patch("donkit_ragops.agent.local_tools.tools.open_db") as mock_open_db:
         mock_open_db.return_value = db
         tool = tool_db_get()
         result = tool.handler({"key": "nonexistent"})
@@ -349,7 +356,7 @@ def test_tool_db_get_nonexistent_key(db: DB) -> None:
 
 def test_tool_db_get_no_key() -> None:
     """Test db_get without key parameter."""
-    with patch("ragops_agent_ce.agent.local_tools.tools.open_db") as mock_open_db:
+    with patch("donkit_ragops.agent.local_tools.tools.open_db") as mock_open_db:
         mock_db = Mock()
         mock_open_db.return_value = mock_db
         tool = tool_db_get()
@@ -365,7 +372,7 @@ def test_tool_db_get_no_key() -> None:
 
 def test_tool_interactive_user_choice_valid_selection() -> None:
     """Test interactive user choice with valid selection."""
-    with patch("ragops_agent_ce.agent.local_tools.tools.interactive_select") as mock_select:
+    with patch("donkit_ragops.agent.local_tools.tools.interactive_select") as mock_select:
         mock_select.return_value = "option2"
         tool = tool_interactive_user_choice()
         result_str = tool.handler(
@@ -382,7 +389,7 @@ def test_tool_interactive_user_choice_valid_selection() -> None:
 
 def test_tool_interactive_user_choice_no_options() -> None:
     """Test interactive user choice with no options."""
-    with patch("ragops_agent_ce.agent.local_tools.tools.interactive_select") as mock_select:
+    with patch("donkit_ragops.agent.local_tools.tools.interactive_select"):
         tool = tool_interactive_user_choice()
         result_str = tool.handler({"title": "Choose", "choices": []})
         result = json.loads(result_str)
@@ -392,7 +399,7 @@ def test_tool_interactive_user_choice_no_options() -> None:
 
 def test_tool_interactive_user_choice_cancelled() -> None:
     """Test interactive user choice when user cancels."""
-    with patch("ragops_agent_ce.agent.local_tools.tools.interactive_select") as mock_select:
+    with patch("donkit_ragops.agent.local_tools.tools.interactive_select") as mock_select:
         mock_select.return_value = None
         tool = tool_interactive_user_choice()
         result_str = tool.handler(
@@ -414,7 +421,7 @@ def test_tool_interactive_user_choice_cancelled() -> None:
 
 def test_tool_interactive_user_confirm_yes() -> None:
     """Test interactive user confirm with yes."""
-    with patch("ragops_agent_ce.agent.local_tools.tools.interactive_confirm") as mock_confirm:
+    with patch("donkit_ragops.agent.local_tools.tools.interactive_confirm") as mock_confirm:
         mock_confirm.return_value = True
         tool = tool_interactive_user_confirm()
         result_str = tool.handler({"question": "Continue?"})
@@ -426,7 +433,7 @@ def test_tool_interactive_user_confirm_yes() -> None:
 
 def test_tool_interactive_user_confirm_no() -> None:
     """Test interactive user confirm with no."""
-    with patch("ragops_agent_ce.agent.local_tools.tools.interactive_confirm") as mock_confirm:
+    with patch("donkit_ragops.agent.local_tools.tools.interactive_confirm") as mock_confirm:
         mock_confirm.return_value = False
         tool = tool_interactive_user_confirm()
         result_str = tool.handler({"question": "Continue?"})
@@ -438,7 +445,7 @@ def test_tool_interactive_user_confirm_no() -> None:
 
 def test_tool_interactive_user_confirm_cancelled() -> None:
     """Test interactive user confirm when cancelled."""
-    with patch("ragops_agent_ce.agent.local_tools.tools.interactive_confirm") as mock_confirm:
+    with patch("donkit_ragops.agent.local_tools.tools.interactive_confirm") as mock_confirm:
         mock_confirm.return_value = None
         tool = tool_interactive_user_confirm()
         result_str = tool.handler({"question": "Continue?"})
@@ -540,3 +547,188 @@ def test_all_tools_have_valid_specs() -> None:
         assert spec.function.description is not None
         assert spec.function.parameters is not None
         assert spec.function.parameters.get("type") == "object"
+
+
+# ============================================================================
+# Tests: ChecklistStatusProvider
+# ============================================================================
+
+
+def test_checklist_status_line_format_empty() -> None:
+    """Test ChecklistStatusLine format with no data."""
+    status = ChecklistStatusLine()
+    assert status.format() == ""
+
+
+def test_checklist_status_line_format_with_data() -> None:
+    """Test ChecklistStatusLine format with data."""
+    status = ChecklistStatusLine(
+        icon="⚡",
+        description="Deploy vector DB",
+        completed=2,
+        total=5,
+    )
+    result = status.format()
+    assert "⚡" in result
+    assert "Deploy vector DB" in result
+    assert "(2/5)" in result
+
+
+def test_checklist_status_provider_singleton() -> None:
+    """Test ChecklistStatusProvider is a singleton."""
+    provider1 = ChecklistStatusProvider()
+    provider2 = ChecklistStatusProvider()
+    assert provider1 is provider2
+
+
+def test_checklist_status_provider_update_from_empty() -> None:
+    """Test updating provider with empty data clears status."""
+    provider = ChecklistStatusProvider()
+    provider.update_from_checklist(None)
+    assert provider.status.total == 0
+
+    provider.update_from_checklist({})
+    assert provider.status.total == 0
+
+
+def test_checklist_status_provider_update_from_checklist() -> None:
+    """Test updating provider with checklist data."""
+    provider = ChecklistStatusProvider()
+
+    checklist_data = {
+        "name": "test_checklist",
+        "items": [
+            {"id": "item_0", "description": "Task 1", "status": "completed"},
+            {"id": "item_1", "description": "Task 2", "status": "in_progress"},
+            {"id": "item_2", "description": "Task 3", "status": "pending"},
+        ],
+    }
+
+    provider.update_from_checklist(checklist_data)
+
+    assert provider.status.total == 3
+    assert provider.status.completed == 1
+    assert provider.status.icon == "⚡"  # in_progress item
+    assert provider.status.description == "Task 2"
+
+
+def test_checklist_status_provider_all_completed() -> None:
+    """Test provider status when all items completed."""
+    provider = ChecklistStatusProvider()
+
+    checklist_data = {
+        "name": "test_checklist",
+        "items": [
+            {"id": "item_0", "description": "Task 1", "status": "completed"},
+            {"id": "item_1", "description": "Task 2", "status": "completed"},
+        ],
+    }
+
+    provider.update_from_checklist(checklist_data)
+
+    assert provider.status.icon == "✓"
+    assert provider.status.completed == 2
+    assert provider.status.total == 2
+
+
+def test_checklist_status_provider_pending_first() -> None:
+    """Test provider shows first pending item when no in_progress."""
+    provider = ChecklistStatusProvider()
+
+    checklist_data = {
+        "name": "test_checklist",
+        "items": [
+            {"id": "item_0", "description": "Task 1", "status": "pending"},
+            {"id": "item_1", "description": "Task 2", "status": "pending"},
+        ],
+    }
+
+    provider.update_from_checklist(checklist_data)
+
+    assert provider.status.icon == "○"  # pending
+    assert provider.status.description == "Task 1"
+
+
+def test_checklist_status_provider_clear() -> None:
+    """Test clearing provider status."""
+    provider = ChecklistStatusProvider()
+
+    # First set some data
+    provider.update_from_checklist(
+        {
+            "items": [{"id": "item_0", "description": "Task", "status": "pending"}],
+        }
+    )
+    assert provider.status.total == 1
+
+    # Clear it
+    provider.clear()
+    assert provider.status.total == 0
+
+
+def test_checklist_status_provider_truncates_long_descriptions() -> None:
+    """Test that long descriptions are truncated."""
+    provider = ChecklistStatusProvider()
+
+    long_desc = "This is a very long task description that should be truncated"
+    checklist_data = {
+        "items": [{"id": "item_0", "description": long_desc, "status": "pending"}],
+    }
+
+    provider.update_from_checklist(checklist_data)
+
+    # Description should be truncated to 35 chars max
+    assert len(provider.status.description) <= 35
+    assert provider.status.description.endswith("...")
+
+
+# ============================================================================
+# Tests: Checklist Tools with Status Provider Integration
+# ============================================================================
+
+
+def test_checklist_tool_updates_status_provider(db) -> None:
+    """Test that checklist tools update the status provider."""
+    with patch("donkit_ragops.agent.local_tools.checklist_tools.open_db") as mock_open_db:
+        mock_open_db.return_value = db
+
+        # Create a checklist
+        tool = tool_create_checklist()
+        tool.handler(
+            {
+                "name": "test_integration",
+                "items": ["Task 1", "Task 2", "Task 3"],
+            }
+        )
+
+        # Provider should be updated
+        assert checklist_status_provider.status.total == 3
+        assert checklist_status_provider.status.completed == 0
+
+
+def test_update_checklist_item_updates_status_provider(db) -> None:
+    """Test that updating checklist item updates the status provider."""
+    with patch("donkit_ragops.agent.local_tools.checklist_tools.open_db") as mock_open_db:
+        mock_open_db.return_value = db
+
+        # Create a checklist first
+        create_tool = tool_create_checklist()
+        create_tool.handler(
+            {
+                "name": "test_update_integration",
+                "items": ["Task 1", "Task 2"],
+            }
+        )
+
+        # Update an item
+        update_tool = tool_update_checklist_item()
+        update_tool.handler(
+            {
+                "name": "test_update_integration",
+                "item_id": "item_0",
+                "status": "completed",
+            }
+        )
+
+        # Provider should reflect the update
+        assert checklist_status_provider.status.completed == 1

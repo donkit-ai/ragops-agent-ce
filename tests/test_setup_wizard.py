@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
-from ragops_agent_ce.setup_wizard import SetupWizard
+from donkit_ragops.setup_wizard import SetupWizard
 
 
 # ============================================================================
@@ -45,7 +45,7 @@ def wizard_with_path(tmp_path: Path) -> SetupWizard:
 
 def test_setup_wizard_init_default_path(tmp_path: Path) -> None:
     """Test SetupWizard initializes with default .env path."""
-    with patch("ragops_agent_ce.setup_wizard.Path.cwd", return_value=tmp_path):
+    with patch("donkit_ragops.setup_wizard.Path.cwd", return_value=tmp_path):
         wizard = SetupWizard()
 
         assert wizard.env_path == tmp_path / ".env"
@@ -66,8 +66,8 @@ def test_setup_wizard_init_custom_path(tmp_path: Path) -> None:
 # ============================================================================
 
 
-@patch("ragops_agent_ce.setup_wizard.interactive_confirm")
-@patch("ragops_agent_ce.setup_wizard.Prompt.ask")
+@patch("donkit_ragops.setup_wizard.interactive_confirm")
+@patch("donkit_ragops.setup_wizard.Prompt.ask")
 def test_configure_openai_success(
     mock_prompt: MagicMock, mock_confirm: MagicMock, wizard: SetupWizard
 ) -> None:
@@ -81,8 +81,8 @@ def test_configure_openai_success(
     assert wizard.config["RAGOPS_OPENAI_API_KEY"] == "sk-test-key-123"
 
 
-@patch("ragops_agent_ce.setup_wizard.interactive_confirm")
-@patch("ragops_agent_ce.setup_wizard.Prompt.ask")
+@patch("donkit_ragops.setup_wizard.interactive_confirm")
+@patch("donkit_ragops.setup_wizard.Prompt.ask")
 def test_configure_openai_empty_key(
     mock_prompt: MagicMock, mock_confirm: MagicMock, wizard: SetupWizard
 ) -> None:
@@ -96,8 +96,8 @@ def test_configure_openai_empty_key(
     assert wizard.config["RAGOPS_OPENAI_API_KEY"] == "sk-test-key-123"
 
 
-@patch("ragops_agent_ce.setup_wizard.interactive_confirm")
-@patch("ragops_agent_ce.setup_wizard.Prompt.ask")
+@patch("donkit_ragops.setup_wizard.interactive_confirm")
+@patch("donkit_ragops.setup_wizard.Prompt.ask")
 def test_configure_openai_with_custom_model(
     mock_prompt: MagicMock, mock_confirm: MagicMock, wizard: SetupWizard
 ) -> None:
@@ -112,8 +112,8 @@ def test_configure_openai_with_custom_model(
     assert wizard.config["RAGOPS_LLM_MODEL"] == "gpt-4-turbo"
 
 
-@patch("ragops_agent_ce.setup_wizard.interactive_confirm")
-@patch("ragops_agent_ce.setup_wizard.Prompt.ask")
+@patch("donkit_ragops.setup_wizard.interactive_confirm")
+@patch("donkit_ragops.setup_wizard.Prompt.ask")
 def test_configure_openai_with_custom_url(
     mock_prompt: MagicMock, mock_confirm: MagicMock, wizard: SetupWizard
 ) -> None:
@@ -131,7 +131,7 @@ def test_configure_openai_with_custom_url(
     assert wizard.config["RAGOPS_OPENAI_BASE_URL"] == "https://api.custom.com/v1"
 
 
-@patch("ragops_agent_ce.setup_wizard.Prompt.ask")
+@patch("donkit_ragops.setup_wizard.Prompt.ask")
 def test_configure_vertex_success(
     mock_prompt: MagicMock, tmp_path: Path, wizard: SetupWizard
 ) -> None:
@@ -147,8 +147,8 @@ def test_configure_vertex_success(
     assert wizard.config["RAGOPS_VERTEX_CREDENTIALS"] == str(creds_file)
 
 
-@patch("ragops_agent_ce.setup_wizard.Confirm.ask")
-@patch("ragops_agent_ce.setup_wizard.Prompt.ask")
+@patch("donkit_ragops.setup_wizard.Confirm.ask")
+@patch("donkit_ragops.setup_wizard.Prompt.ask")
 def test_configure_vertex_file_not_found(
     mock_prompt: MagicMock, mock_confirm: MagicMock, tmp_path: Path, wizard: SetupWizard
 ) -> None:
@@ -164,7 +164,7 @@ def test_configure_vertex_file_not_found(
     assert result is True
 
 
-@patch("ragops_agent_ce.setup_wizard.Prompt.ask")
+@patch("donkit_ragops.setup_wizard.Prompt.ask")
 def test_configure_azure_openai_success(mock_prompt: MagicMock, wizard: SetupWizard) -> None:
     """Test successful Azure OpenAI configuration."""
     mock_prompt.side_effect = [
@@ -184,7 +184,7 @@ def test_configure_azure_openai_success(mock_prompt: MagicMock, wizard: SetupWiz
     assert wizard.config["RAGOPS_AZURE_OPENAI_DEPLOYMENT"] == "gpt-4-deployment"
 
 
-@patch("ragops_agent_ce.setup_wizard.Prompt.ask")
+@patch("donkit_ragops.setup_wizard.Prompt.ask")
 def test_configure_ollama_success(mock_prompt: MagicMock, wizard: SetupWizard) -> None:
     """Test successful Ollama configuration."""
     mock_prompt.side_effect = [
@@ -202,7 +202,7 @@ def test_configure_ollama_success(mock_prompt: MagicMock, wizard: SetupWizard) -
     assert wizard.config["RAGOPS_OLLAMA_EMBEDDINGS_MODEL"] == "nomic-embed-text"
 
 
-@patch("ragops_agent_ce.setup_wizard.Prompt.ask")
+@patch("donkit_ragops.setup_wizard.Prompt.ask")
 def test_configure_openrouter_success(mock_prompt: MagicMock, wizard: SetupWizard) -> None:
     """Test successful OpenRouter configuration."""
     mock_prompt.side_effect = [
@@ -320,9 +320,9 @@ def test_configure_provider_unknown(wizard_with_path: SetupWizard) -> None:
 # ============================================================================
 
 
-@patch("ragops_agent_ce.setup_wizard.Confirm.ask")
-@patch("ragops_agent_ce.setup_wizard.interactive_confirm")
-@patch("ragops_agent_ce.setup_wizard.Prompt.ask")
+@patch("donkit_ragops.setup_wizard.Confirm.ask")
+@patch("donkit_ragops.setup_wizard.interactive_confirm")
+@patch("donkit_ragops.setup_wizard.Prompt.ask")
 def test_openai_key_format_warning(
     mock_prompt: MagicMock, mock_confirm: MagicMock, mock_confirm_ask: MagicMock, wizard: SetupWizard
 ) -> None:
@@ -337,7 +337,7 @@ def test_openai_key_format_warning(
     assert wizard.config["RAGOPS_OPENAI_API_KEY"] == "custom-key-format"
 
 
-@patch("ragops_agent_ce.setup_wizard.Prompt.ask")
+@patch("donkit_ragops.setup_wizard.Prompt.ask")
 def test_azure_endpoint_format_validation(mock_prompt: MagicMock, wizard: SetupWizard) -> None:
     """Test Azure OpenAI accepts valid endpoint."""
     mock_prompt.side_effect = [
@@ -354,8 +354,8 @@ def test_azure_endpoint_format_validation(mock_prompt: MagicMock, wizard: SetupW
     assert wizard.config["RAGOPS_AZURE_OPENAI_ENDPOINT"] == "https://myresource.openai.azure.com"
 
 
-@patch("ragops_agent_ce.setup_wizard.interactive_confirm")
-@patch("ragops_agent_ce.setup_wizard.Prompt.ask")
+@patch("donkit_ragops.setup_wizard.interactive_confirm")
+@patch("donkit_ragops.setup_wizard.Prompt.ask")
 def test_openai_custom_url_format_validation(
     mock_prompt: MagicMock, mock_confirm: MagicMock, wizard: SetupWizard
 ) -> None:
@@ -377,11 +377,11 @@ def test_openai_custom_url_format_validation(
 # ============================================================================
 
 
-@patch("ragops_agent_ce.setup_wizard.SetupWizard._show_welcome")
-@patch("ragops_agent_ce.setup_wizard.SetupWizard._choose_provider")
-@patch("ragops_agent_ce.setup_wizard.SetupWizard.configure_provider")
-@patch("ragops_agent_ce.setup_wizard.SetupWizard._configure_optional_settings")
-@patch("ragops_agent_ce.setup_wizard.SetupWizard.save_config")
+@patch("donkit_ragops.setup_wizard.SetupWizard._show_welcome")
+@patch("donkit_ragops.setup_wizard.SetupWizard._choose_provider")
+@patch("donkit_ragops.setup_wizard.SetupWizard.configure_provider")
+@patch("donkit_ragops.setup_wizard.SetupWizard._configure_optional_settings")
+@patch("donkit_ragops.setup_wizard.SetupWizard.save_config")
 def test_run_wizard_success(
     mock_save: MagicMock,
     mock_optional: MagicMock,
@@ -405,8 +405,8 @@ def test_run_wizard_success(
     mock_save.assert_called_once()
 
 
-@patch("ragops_agent_ce.setup_wizard.SetupWizard._show_welcome")
-@patch("ragops_agent_ce.setup_wizard.SetupWizard._choose_provider")
+@patch("donkit_ragops.setup_wizard.SetupWizard._show_welcome")
+@patch("donkit_ragops.setup_wizard.SetupWizard._choose_provider")
 def test_run_wizard_provider_cancelled(
     mock_choose: MagicMock, mock_welcome: MagicMock, wizard: SetupWizard
 ) -> None:
@@ -418,9 +418,9 @@ def test_run_wizard_provider_cancelled(
     assert result is False
 
 
-@patch("ragops_agent_ce.setup_wizard.SetupWizard._show_welcome")
-@patch("ragops_agent_ce.setup_wizard.SetupWizard._choose_provider")
-@patch("ragops_agent_ce.setup_wizard.SetupWizard.configure_provider")
+@patch("donkit_ragops.setup_wizard.SetupWizard._show_welcome")
+@patch("donkit_ragops.setup_wizard.SetupWizard._choose_provider")
+@patch("donkit_ragops.setup_wizard.SetupWizard.configure_provider")
 def test_run_wizard_configuration_failed(
     mock_configure: MagicMock, mock_choose: MagicMock, mock_welcome: MagicMock, wizard: SetupWizard
 ) -> None:
@@ -445,8 +445,7 @@ def test_save_config_with_none_values(wizard_with_path: SetupWizard, tmp_path: P
         "RAGOPS_OPENAI_API_KEY": "sk-test-123",
     }
 
-    with patch("ragops_agent_ce.setup_wizard.console"):
-        result = wizard_with_path.save_config()
+    result = wizard_with_path.save_config()
 
     assert result is True
     content = (tmp_path / ".env").read_text()

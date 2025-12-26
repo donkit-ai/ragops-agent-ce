@@ -1,6 +1,6 @@
 # RAGOps Agent CE (Community Edition)
 
-[![PyPI version](https://badge.fury.io/py/donkit-ragops-ce.svg)](https://badge.fury.io/py/donkit-ragops-ce)
+[![PyPI version](https://badge.fury.io/py/donkit-ragops.svg)](https://badge.fury.io/py/donkit-ragops)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -22,7 +22,7 @@ Built by [Donkit AI](https://donkit.ai) - Open Source RAG Infrastructure.
 ### Option A: Using pip
 
 ```bash
-pip install donkit-ragops-ce
+pip install donkit-ragops
 ```
 
 ### Option B: Using Poetry (Recommended for Python 3.12+)
@@ -35,8 +35,8 @@ cd ~/ragops-workspace
 # Initialize Poetry project
 poetry init --no-interaction --python="^3.12"
 
-# Add donkit-ragops-ce
-poetry add donkit-ragops-ce
+# Add donkit-ragops
+poetry add donkit-ragops
 
 # Activate the virtual environment
 poetry shell
@@ -44,12 +44,12 @@ poetry shell
 
 After activation, you can run the agent with:
 ```bash
-donkit-ragops-ce
+donkit-ragops
 ```
 
 Or run directly without activating the shell:
 ```bash
-poetry run donkit-ragops-ce
+poetry run donkit-ragops
 ```
 
 ## Quick Start
@@ -64,13 +64,13 @@ poetry run donkit-ragops-ce
 ### Step 1: Install the package
 
 ```bash
-pip install donkit-ragops-ce
+pip install donkit-ragops
 ```
 
 ### Step 2: Run the agent (first time)
 
 ```bash
-donkit-ragops-ce
+donkit-ragops
 ```
 
 On first run, an **interactive setup wizard** will guide you through configuration:
@@ -88,7 +88,7 @@ If you prefer to configure manually or reconfigure later:
 
 ```bash
 # Run setup wizard again
-donkit-ragops-ce --setup
+donkit-ragops --setup
 ```
 
 Or create a `.env` file manually in your working directory:
@@ -153,13 +153,13 @@ The agent will automatically:
 
 ```bash
 # Start interactive session
-donkit-ragops-ce
+donkit-ragops
 
 # With specific provider
-donkit-ragops-ce -p vertexai
+donkit-ragops -p vertexai
 
 # With custom model
-donkit-ragops-ce -p openai -m gpt-4
+donkit-ragops -p openai -m gpt-4
 ```
 
 ### Command-line Options
@@ -174,7 +174,7 @@ donkit-ragops-ce -p openai -m gpt-4
 
 ```bash
 # Health check
-donkit-ragops-ce ping
+donkit-ragops ping
 ```
 
 ### Environment Variables
@@ -235,7 +235,7 @@ Plans RAG pipeline configuration based on requirements.
 
 ```bash
 # Example usage
-donkit-ragops-ce --mcp-command "ragops-rag-planner"
+donkit-ragops --mcp-command "ragops-rag-planner"
 ```
 
 **Tools:**
@@ -247,7 +247,7 @@ Chunks documents for vector storage.
 
 ```bash
 # Example usage
-donkit-ragops-ce --mcp-command "ragops-chunker"
+donkit-ragops --mcp-command "ragops-chunker"
 ```
 
 **Tools:**
@@ -260,7 +260,7 @@ Loads chunks into vector databases.
 
 ```bash
 # Example usage
-donkit-ragops-ce --mcp-command "ragops-vectorstore-loader"
+donkit-ragops --mcp-command "ragops-vectorstore-loader"
 ```
 
 **Tools:**
@@ -273,7 +273,7 @@ Manages Docker Compose infrastructure.
 
 ```bash
 # Example usage
-donkit-ragops-ce --mcp-command "ragops-compose-manager"
+donkit-ragops --mcp-command "ragops-compose-manager"
 ```
 
 **Tools:**
@@ -329,7 +329,7 @@ All tools are available with prefixes:
 ### Basic RAG Pipeline
 
 ```bash
-donkit-ragops-ce
+donkit-ragops
 ```
 
 ```
@@ -346,7 +346,7 @@ The agent will:
 ### Custom Configuration
 
 ```bash
-donkit-ragops-ce -p vertexai -m gemini-1.5-pro
+donkit-ragops -p vertexai -m gemini-1.5-pro
 ```
 
 ```
@@ -366,8 +366,8 @@ Each project gets its own:
 ### Project Structure
 
 ```
-donkit-ragops-ce/
-├── src/ragops_agent_ce/
+donkit-ragops/
+├── src/donkit_ragops/
 │   ├── agent/          # LLM agent core
 │   ├── llm/            # LLM provider integrations
 │   ├── mcp/            # MCP servers and client
@@ -486,7 +486,7 @@ If MCP servers fail to start:
 
 ```bash
 # Check MCP server logs
-RAGOPS_LOG_LEVEL=DEBUG donkit-ragops-ce
+RAGOPS_LOG_LEVEL=DEBUG donkit-ragops
 ```
 
 ### Vector Store Connection

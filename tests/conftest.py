@@ -31,6 +31,7 @@ os.environ.setdefault("RAGOPS_API_URL", "http://localhost:8080")
 def disable_loguru():
     """Disable loguru logging during tests to prevent pytest capture issues."""
     import loguru
+
     # Remove all handlers and disable logging
     loguru.logger.remove()
     # Add a null handler to prevent any logging
@@ -38,6 +39,17 @@ def disable_loguru():
     yield
     # Clean up after test
     loguru.logger.remove()
+
+
+@pytest.fixture(autouse=True)
+def use_plain_ui():
+    """Force PlainUI for all tests to avoid prompt_toolkit file handle issues."""
+    from donkit_ragops.ui import reset_ui, set_ui_adapter, UIAdapter
+
+    reset_ui()
+    set_ui_adapter(UIAdapter.PLAIN)
+    yield
+    reset_ui()
 
 
 # ============================================================================
@@ -134,9 +146,7 @@ class BaseMockProvider(LLMModelAbstract):
             tool_calls=tool_calls,
         )
 
-    async def generate_stream(
-        self, request: GenerateRequest
-    ) -> AsyncIterator[StreamChunk]:
+    async def generate_stream(self, request: GenerateRequest) -> AsyncIterator[StreamChunk]:
         """Generate a streaming response for the given request."""
         self.stream_call_count += 1
         self.messages_history.append(request.messages.copy())
@@ -239,13 +249,13 @@ def mocked_mcp_client():
 
     @contextmanager
     def _create_mock():
-        with patch("ragops_agent_ce.mcp.client.Client") as mock_client_class:
+        with patch("donkit_ragops.mcp.client.Client") as mock_client_class:
             mock_client_instance = AsyncMock()
             mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
             mock_client_instance.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client_instance
 
-            with patch("ragops_agent_ce.mcp.client.StdioTransport"):
+            with patch("donkit_ragops.mcp.client.StdioTransport"):
                 yield mock_client_class, mock_client_instance
 
     return _create_mock
@@ -258,9 +268,9 @@ def cli_mocks():
     Returns:
         Tuple of (mock_setup, mock_select, mock_repl)
     """
-    with patch("ragops_agent_ce.cli.run_setup_if_needed") as mock_setup, patch(
-        "ragops_agent_ce.cli.select_model_at_startup"
-    ) as mock_select, patch("ragops_agent_ce.cli._astart_repl") as mock_repl:
+    with patch("donkit_ragops.cli.run_setup_if_needed") as mock_setup, patch(
+        "donkit_ragops.cli.select_model_at_startup"
+    ) as mock_select, patch("donkit_ragops.cli._run_local_mode") as mock_repl:
         # Default return values
         mock_setup.return_value = True
         mock_select.return_value = ("openai", "gpt-4")
