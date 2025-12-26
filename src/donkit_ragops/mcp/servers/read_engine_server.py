@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import warnings
 
 from donkit_ragops.schemas.config_schemas import ReadingFormat
