@@ -37,3 +37,4 @@ image_cache.json
 projects/
 docs/
 /poetry.lock
+.claude/
