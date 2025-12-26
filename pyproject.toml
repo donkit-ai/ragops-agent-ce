@@ -1,14 +1,14 @@
 [tool.poetry]
-name = "donkit-ragops-ce"
-version = "0.3.18"
-description = "Community Edition CLI agent for building RAG pipelines"
+name = "donkit-ragops"
+version = "0.3.19"
+description = "CLI agent for building RAG pipelines"
 authors = ["Donkit AI <opensource@donkit.ai>"]
 license = "MIT"
 readme = "README.md"
-packages = [{ include = "ragops_agent_ce", from = "src" }]
+packages = [{ include = "donkit_ragops", from = "src" }]
 include = [
-    "src/ragops_agent_ce/compose/services/*.yml",
-    "src/ragops_agent_ce/compose/templates/*"
+    "src/donkit_ragops/compose/services/*.yml",
+    "src/donkit_ragops/compose/templates/*"
 ]
 
 [tool.poetry.dependencies]
@@ -33,22 +33,24 @@ donkit-read-engine = "^0.2.6"
 fastmcp = "^2.13.0.2"
 donkit-ragops-api-gateway-client = "^0.1.6"
 nest-asyncio = "^1.6.0"
+keyring = "^25.6"
 donkit-llm = "^0.1.6"
 prompt-toolkit = "^3.0.48"
 toonify = {extras = ["pydantic"], version = "^1.5.1"}
+tiktoken = "^0.12.0"
+langdetect = "^1.0.9"
 
 
 [tool.poetry.scripts]
-donkit-ragops-ce = "ragops_agent_ce.cli:app"
-ragops-agent = "ragops_agent_ce.cli:app"
-donkit-ragops-mcp = "ragops_agent_ce.mcp.servers.donkit_ragops_mcp:main"
-ragops-rag-planner = "ragops_agent_ce.mcp.servers.planner_server:main"
-ragops-read-engine = "ragops_agent_ce.mcp.servers.read_engine_server:main"
-ragops-chunker = "ragops_agent_ce.mcp.servers.chunker_server:main"
-ragops-vectorstore-loader = "ragops_agent_ce.mcp.servers.vectorstore_loader_server:main"
-ragops-checklist = "ragops_agent_ce.mcp.servers.checklist_server:main"
-ragops-compose-manager = "ragops_agent_ce.mcp.servers.compose_manager_server:main"
-ragops-rag-query = "ragops_agent_ce.mcp.servers.rag_query_server:main"
+donkit-ragops = "donkit_ragops.cli:app"
+donkit-ragops-mcp = "donkit_ragops.mcp.servers.donkit_ragops_mcp:main"
+ragops-rag-planner = "donkit_ragops.mcp.servers.planner_server:main"
+ragops-read-engine = "donkit_ragops.mcp.servers.read_engine_server:main"
+ragops-chunker = "donkit_ragops.mcp.servers.chunker_server:main"
+ragops-vectorstore-loader = "donkit_ragops.mcp.servers.vectorstore_loader_server:main"
+ragops-checklist = "donkit_ragops.mcp.servers.checklist_server:main"
+ragops-compose-manager = "donkit_ragops.mcp.servers.compose_manager_server:main"
+ragops-rag-query = "donkit_ragops.mcp.servers.rag_query_server:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.2"
@@ -56,12 +58,12 @@ pytest-cov = "^6.0.0"
 ruff = "^0.5.0"
 pytest-asyncio = "^1.3.0"
 # local dev deps
-#donkit-ragops-api-gateway-client = { path = "../ragops-agent/shared/ragops-api-gateway-client", develop = true }
-#donkit-llm = { path = "../ragops-agent/shared/donkit-llm", develop = true }
-#donkit-chunker = { path = "../ragops-agent/shared/chunker", develop = true }
-#donkit-vectorstore-loader = { path = "../ragops-agent/shared/vectorstore-loader", develop = true }
-#donkit-read-engine = { path = "../ragops-agent/shared/read-engine", develop = true }
-#donkit-embeddings = { path = "../ragops-agent/shared/embeddings", develop = true }
+donkit-ragops-api-gateway-client = { path = "../ragops-agent/shared/ragops-api-gateway-client", develop = true }
+donkit-llm = { path = "../ragops-agent/shared/donkit-llm", develop = true }
+donkit-chunker = { path = "../ragops-agent/shared/chunker", develop = true }
+donkit-vectorstore-loader = { path = "../ragops-agent/shared/vectorstore-loader", develop = true }
+donkit-read-engine = { path = "../ragops-agent/shared/read-engine", develop = true }
+donkit-embeddings = { path = "../ragops-agent/shared/embeddings", develop = true }
 
 
 [tool.ruff]

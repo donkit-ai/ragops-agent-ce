@@ -18,7 +18,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-from ragops_agent_ce.mcp.client import MCPClient
+from donkit_ragops.mcp.client import MCPClient
 
 # ============================================================================
 # Fixtures
@@ -273,12 +273,12 @@ async def test_acall_tool_cancellation(mocked_mcp_client) -> None:
 
 @pytest.mark.asyncio
 async def test_acall_tool_keyboard_interrupt(mocked_mcp_client) -> None:
-    """Test tool call converts KeyboardInterrupt to CancelledError."""
+    """Test tool call propagates KeyboardInterrupt."""
     client = MCPClient(command="python", args=["server.py"])
 
     with mocked_mcp_client() as (mock_class, mock_instance):
         mock_instance.__aenter__ = AsyncMock(side_effect=KeyboardInterrupt("User interrupted"))
-        with pytest.raises(asyncio.CancelledError):
+        with pytest.raises(KeyboardInterrupt):
             await client._acall_tool("test_tool", {})
 
 
@@ -300,13 +300,13 @@ def test_call_tool_success() -> None:
 
 
 def test_call_tool_keyboard_interrupt() -> None:
-    """Test that KeyboardInterrupt is converted to CancelledError."""
+    """Test that KeyboardInterrupt is propagated."""
     client = MCPClient(command="python", args=["server.py"])
 
     with patch.object(client, "_acall_tool", new_callable=AsyncMock) as mock_acall:
         mock_acall.side_effect = KeyboardInterrupt()
 
-        with pytest.raises(asyncio.CancelledError):
+        with pytest.raises(KeyboardInterrupt):
             client.call_tool("test_tool", {})
 
 

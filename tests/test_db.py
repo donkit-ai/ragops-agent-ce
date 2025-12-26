@@ -8,16 +8,16 @@ from pathlib import Path
 from typing import Generator
 
 import pytest
-from ragops_agent_ce.config import Settings
-from ragops_agent_ce.db import DB
-from ragops_agent_ce.db import KV
-from ragops_agent_ce.db import close
-from ragops_agent_ce.db import kv_all
-from ragops_agent_ce.db import kv_all_by_prefix
-from ragops_agent_ce.db import kv_delete
-from ragops_agent_ce.db import kv_get
-from ragops_agent_ce.db import kv_set
-from ragops_agent_ce.db import migrate
+from donkit_ragops.config import Settings
+from donkit_ragops.db import DB
+from donkit_ragops.db import KV
+from donkit_ragops.db import close
+from donkit_ragops.db import kv_all
+from donkit_ragops.db import kv_all_by_prefix
+from donkit_ragops.db import kv_delete
+from donkit_ragops.db import kv_get
+from donkit_ragops.db import kv_set
+from donkit_ragops.db import migrate
 from sqlmodel import Session
 from sqlmodel import select
 

@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock
 from unittest.mock import Mock
 
 import pytest
-from ragops_agent_ce.agent.agent import EventType
-from ragops_agent_ce.agent.agent import LLMAgent
-from ragops_agent_ce.agent.local_tools.tools import AgentTool
+from donkit_ragops.agent.agent import EventType
+from donkit_ragops.agent.agent import LLMAgent
+from donkit_ragops.agent.local_tools.tools import AgentTool
 from donkit.llm import Message
 from donkit.llm import ToolCall
 from donkit.llm import FunctionCall
-from ragops_agent_ce.mcp.client import MCPClient
+from donkit_ragops.mcp.client import MCPClient
 
 from .conftest import BaseMockProvider
 

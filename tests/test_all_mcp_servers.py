@@ -20,12 +20,12 @@ import pytest
 import pytest_asyncio
 from fastmcp.client import Client
 from fastmcp.client.transports import FastMCPTransport
-from ragops_agent_ce.mcp.servers.chunker_server import server as chunker_server
-from ragops_agent_ce.mcp.servers.compose_manager_server import server as compose_server
-from ragops_agent_ce.mcp.servers.planner_server import server as planner_server
-from ragops_agent_ce.mcp.servers.rag_query_server import server as query_server
-from ragops_agent_ce.mcp.servers.read_engine_server import server as read_engine_server
-from ragops_agent_ce.mcp.servers.vectorstore_loader_server import server as vectorstore_server
+from donkit_ragops.mcp.servers.chunker_server import server as chunker_server
+from donkit_ragops.mcp.servers.compose_manager_server import server as compose_server
+from donkit_ragops.mcp.servers.planner_server import server as planner_server
+from donkit_ragops.mcp.servers.rag_query_server import server as query_server
+from donkit_ragops.mcp.servers.read_engine_server import server as read_engine_server
+from donkit_ragops.mcp.servers.vectorstore_loader_server import server as vectorstore_server
 
 # ============================================================================
 # Server Configuration

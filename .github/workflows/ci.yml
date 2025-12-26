@@ -122,7 +122,7 @@ jobs:
         id: publish
         run: |
           set -e
-          echo "Building package ragops-agent-ce"
+          echo "Building package donkit-ragops"
           poetry build
           echo "Publishing to public PyPI.org"
           poetry publish
